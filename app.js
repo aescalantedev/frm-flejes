@@ -11,7 +11,7 @@ async function cargarDatos() {
 
     inventario = {};
     for (const torre of torres) {
-        const { data: flejes } = await client.from('inventario').select('*').eq('torre_id', torre.id);
+        const { data: flejes } = await client.from('inventario').select('*').eq('torre_id', torre.id).order('created_at', { ascending: false });
         inventario[torre.id] = flejes || [];
     }
 
@@ -324,10 +324,10 @@ function renderPanorama() {
         const total = dato.torre.cantidad_maxima;
         for (let i = 0; i < total; i++) {
             const numVisual = total - i;
-            if (i < dato.flejes.length) {
+            if ((total - i - 1) < dato.flejes.length) {
                 flejesHTML.push(`<div class="panorama-fleje">
                     <span class="panorama-fleje-numero">#${numVisual}</span>
-                    <span class="panorama-fleje-peso">${dato.flejes[i].peso.toFixed(2)}</span>
+                    <span class="panorama-fleje-peso">${dato.flejes[total - i - 1].peso.toFixed(2)}</span>
                     <span class="panorama-fleje-unidad">kg</span>
                 </div>`);
             } else {
