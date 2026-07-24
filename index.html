@@ -5,227 +5,457 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Flejes - Almacén de Acero</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style type="text/tailwindcss">
+        @theme {
+            --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+            --color-bg: #0F172A;
+            --color-surface: #1E293B;
+            --color-surface-hover: #334155;
+            --color-border: #334155;
+            --color-text: #F8FAFC;
+            --color-text-muted: #94A3B8;
+            --color-accent: #059669;
+            --color-accent-hover: #047857;
+            --color-warning: #F59E0B;
+            --color-danger: #DC2626;
+            --color-info: #3B82F6;
+        }
+    </style>
     <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-    <header>
-        <h1>🏭 Sistema de Flejes</h1>
-        <p>Almacén de Acero - Control de Torres</p>
-    </header>
+<body class="bg-bg text-text min-h-screen">
 
-    <nav class="tabs">
-        <button class="tab" data-tab="torres">Torres</button>
-        <button class="tab active" data-tab="panorama">Panorama</button>
-        <button class="tab" data-tab="historial">Historial</button>
-    </nav>
+    <!-- ==================== SEARCH MODAL ==================== -->
+    <div id="searchModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-20 px-4">
+        <div class="bg-surface rounded-xl w-full max-w-lg border border-border shadow-2xl">
+            <div class="flex items-center gap-3 p-4 border-b border-border">
+                <img src="icons/SVG/magnifier.svg" class="w-5 h-5 brightness-0 invert opacity-50" alt="">
+                <input type="text" id="searchInput" placeholder="Buscar torre por posición o medida..." class="flex-1 bg-transparent text-text placeholder:text-text-muted outline-none text-sm">
+                <button onclick="cerrarBusqueda()" class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-surface-hover transition-colors">
+                    <img src="icons/SVG/cross.svg" class="w-5 h-5 brightness-0 invert opacity-50" alt="">
+                </button>
+            </div>
+            <div id="searchResults" class="max-h-80 overflow-y-auto p-2">
+                <p class="text-text-muted text-sm text-center py-8">Escribe para buscar...</p>
+            </div>
+        </div>
+    </div>
 
-    <main class="container">
-        <section id="torres" class="section">
-            <div id="vistaLista">
-                <div class="section-header">
-                    <h2>Seleccionar Torre</h2>
-                    <button class="btn btn-primary" onclick="mostrarFormulario()">+ Nueva Torre</button>
+    <!-- ==================== SIDEBAR OVERLAY (mobile) ==================== -->
+    <div id="sidebarOverlay" class="hidden fixed inset-0 bg-black/50 z-30 md:hidden" onclick="closeSidebar()"></div>
+
+    <!-- ==================== APP CONTAINER ==================== -->
+    <div class="flex min-h-screen">
+
+        <!-- ==================== SIDEBAR ==================== -->
+        <aside id="sidebar" class="fixed top-0 left-0 h-full bg-surface border-r border-border z-40 flex flex-col transition-all duration-300 md:flex md:w-16 lg:w-60">
+            <!-- Brand -->
+            <div class="h-16 flex items-center gap-3 px-4 border-b border-border shrink-0">
+                <div class="w-8 h-8 rounded-lg bg-accent flex items-center justify-center shrink-0">
+                    <img src="icons/SVG/layers.svg" class="w-5 h-5 brightness-0 invert" alt="">
                 </div>
-                <div id="torresContainer" class="cards-container"></div>
-                <p id="noTorres" class="no-data">No hay torres registradas</p>
+                <span class="hidden lg:block font-bold text-sm tracking-wide">SISTEMA DE FLEJES</span>
             </div>
 
-            <div id="vistaFormulario" class="hidden">
-                <div class="section-header">
-                    <h2 id="formTitle">Nueva Torre</h2>
-                    <button class="btn btn-secondary" onclick="volverLista()">← Volver</button>
-                </div>
-                <form id="torreForm" class="form-card">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Posición</label>
-                            <input type="text" id="posicion" placeholder="Ej: P01" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Nombre Medida</label>
-                            <input type="text" id="nombreMedida" placeholder="Ej: 304 x 2.00" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Cantidad Máxima de Flejes</label>
-                            <input type="number" id="cantidadMaxima" min="1" placeholder="Ej: 5" required>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary" id="btnTorre">Guardar</button>
-                        <button type="button" class="btn btn-secondary" onclick="volverLista()">Cancelar</button>
-                    </div>
-                </form>
-            </div>
+            <!-- Nav Items -->
+            <nav class="flex-1 py-4 px-2 space-y-1">
+                <button onclick="navigateTo('torres')" data-nav="torres" class="sidebar-item w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">
+                    <img src="icons/SVG/store.svg" class="w-5 h-5 brightness-0 invert shrink-0" alt="">
+                    <span class="hidden lg:block">Torres</span>
+                </button>
+                <button onclick="navigateTo('panorama')" data-nav="panorama" class="sidebar-item w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">
+                    <img src="icons/SVG/chart-bars.svg" class="w-5 h-5 brightness-0 invert shrink-0" alt="">
+                    <span class="hidden lg:block">Panorama</span>
+                </button>
+                <button onclick="navigateTo('historial')" data-nav="historial" class="sidebar-item w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">
+                    <img src="icons/SVG/history.svg" class="w-5 h-5 brightness-0 invert shrink-0" alt="">
+                    <span class="hidden lg:block">Historial</span>
+                </button>
+            </nav>
 
-            <div id="vistaDetalle" class="hidden">
-                <div class="section-header">
-                    <h2>Detalle de Torre</h2>
-                    <button class="btn btn-secondary" onclick="volverLista()">← Volver</button>
-                </div>
-                <div class="torre-detail">
-                    <div class="detail-header">
-                        <div class="detail-info">
-                            <h3 id="detailPosicion"></h3>
-                            <p id="detailMedida"></p>
+            <!-- Bottom -->
+            <div class="p-2 border-t border-border">
+                <button onclick="navigateTo('config')" data-nav="config" class="sidebar-item w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">
+                    <img src="icons/SVG/cog.svg" class="w-5 h-5 brightness-0 invert shrink-0" alt="">
+                    <span class="hidden lg:block">Configuración</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- ==================== MAIN CONTENT ==================== -->
+        <div class="flex-1 md:ml-16 lg:ml-60 flex flex-col min-h-screen">
+
+            <!-- ==================== APPBAR ==================== -->
+            <header class="h-16 bg-surface border-b border-border flex items-center px-4 gap-2 md:gap-3 sticky top-0 z-20 shrink-0">
+                <!-- Menu toggle (tablet) -->
+                <button onclick="toggleSidebar()" class="md:flex hidden lg:hidden items-center justify-center min-w-[44px] min-h-[44px] rounded-lg hover:bg-surface-hover transition-colors">
+                    <img src="icons/SVG/menu.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                </button>
+                <!-- Title -->
+                <h1 id="appbarTitle" class="font-semibold text-base truncate flex-1">Torres</h1>
+                <!-- Actions -->
+                <!-- Nueva Torre (mobile only) -->
+                <button onclick="mostrarFormulario()" id="btnNuevaTorre" class="flex md:hidden items-center justify-center min-w-[44px] min-h-[44px] rounded-lg bg-accent hover:bg-accent-hover transition-colors">
+                    <img src="icons/SVG/plus-circle.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                </button>
+                <button onclick="abrirBusqueda()" class="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg hover:bg-surface-hover transition-colors">
+                    <img src="icons/SVG/magnifier.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                </button>
+                <button id="btnRefreshPanorama" onclick="renderPanorama()" class="hidden items-center justify-center min-w-[44px] min-h-[44px] rounded-lg hover:bg-surface-hover transition-colors">
+                    <img src="icons/SVG/sync.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                </button>
+                <button id="btnFilterHistorial" onclick="document.getElementById('filtroFecha').showPicker?.()" class="hidden items-center justify-center min-w-[44px] min-h-[44px] rounded-lg hover:bg-surface-hover transition-colors">
+                    <img src="icons/SVG/calendar-full.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                </button>
+                <!-- User Avatar -->
+                <button class="flex items-center gap-2 min-h-[44px] rounded-lg hover:bg-surface-hover transition-colors px-2">
+                    <div class="w-8 h-8 rounded-full bg-accent/20 border-2 border-accent flex items-center justify-center">
+                        <img src="icons/SVG/user.svg" class="w-4 h-4 brightness-0 invert" alt="">
+                    </div>
+                    <span class="hidden lg:block text-sm font-medium truncate max-w-[120px]">Admin</span>
+                </button>
+            </header>
+
+            <!-- ==================== CONTENT ==================== -->
+            <main class="flex-1 p-4 pb-20 md:pb-4 overflow-y-auto">
+
+                <!-- ========== SECTION: TORRES ========== -->
+                <section id="torres" class="section hidden">
+                    <!-- Vista Lista -->
+                    <div id="vistaLista">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-bold text-accent">Seleccionar Torre</h2>
+                            <button onclick="mostrarFormulario()" class="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]">
+                                <img src="icons/SVG/plus-circle.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                                <span class="hidden sm:inline">Nueva Torre</span>
+                            </button>
                         </div>
-                        <div class="detail-counter">
-                            <span class="counter-label">Flejes almacenados</span>
-                            <div class="counter-value">
-                                <span id="counterActual">0</span>
-                                <span class="counter-separator">/</span>
-                                <span id="counterMaximo">0</span>
+                        <div id="torresContainer" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+                        <p id="noTorres" class="hidden text-text-muted text-center py-12 italic">No hay torres registradas</p>
+                    </div>
+
+                    <!-- Vista Formulario -->
+                    <div id="vistaFormulario" class="hidden">
+                        <div class="flex items-center gap-3 mb-6">
+                            <button onclick="volverLista()" class="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg hover:bg-surface-hover transition-colors">
+                                <img src="icons/SVG/arrow-left.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                            </button>
+                            <h2 id="formTitle" class="text-lg font-bold text-accent">Nueva Torre</h2>
+                        </div>
+                        <form id="torreForm" class="bg-surface rounded-xl p-6 border border-border max-w-lg">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-text-muted mb-1.5">Posición</label>
+                                    <input type="text" id="posicion" placeholder="Ej: P01" required class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent transition-colors min-h-[48px]">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-text-muted mb-1.5">Nombre Medida</label>
+                                    <input type="text" id="nombreMedida" placeholder="Ej: 304 x 2.00" required class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent transition-colors min-h-[48px]">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-text-muted mb-1.5">Cantidad Máxima de Flejes</label>
+                                    <input type="number" id="cantidadMaxima" min="1" placeholder="Ej: 5" required class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent transition-colors min-h-[48px]">
+                                </div>
+                            </div>
+                            <div class="flex gap-3 mt-6">
+                                <button type="submit" id="btnTorre" class="flex-1 bg-accent hover:bg-accent-hover text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">Guardar</button>
+                                <button type="button" onclick="volverLista()" class="flex-1 bg-surface-hover hover:bg-border text-text px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Vista Detalle (removed - now in modal) -->
+                </section>
+
+                <!-- ========== SECTION: PANORAMA ========== -->
+                <section id="panorama" class="section">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-bold text-accent">Estado del Almacén</h2>
+                        <button onclick="renderPanorama()" class="flex items-center gap-2 bg-surface hover:bg-surface-hover text-text px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border border-border min-h-[44px]">
+                            <img src="icons/SVG/sync.svg" class="w-4 h-4 brightness-0 invert" alt="">
+                            Actualizar
+                        </button>
+                    </div>
+                    <!-- Stats -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                        <div class="bg-surface rounded-xl p-4 border border-border text-center">
+                            <span class="text-xs text-text-muted block mb-1">Total Torres</span>
+                            <span id="statTorres" class="text-2xl font-bold text-accent font-mono">0</span>
+                        </div>
+                        <div class="bg-surface rounded-xl p-4 border border-border text-center">
+                            <span class="text-xs text-text-muted block mb-1">Total Flejes</span>
+                            <span id="statFlejes" class="text-2xl font-bold text-accent font-mono">0</span>
+                        </div>
+                        <div class="bg-surface rounded-xl p-4 border border-border text-center">
+                            <span class="text-xs text-text-muted block mb-1">Peso Total</span>
+                            <span id="statPeso" class="text-2xl font-bold text-warning font-mono">0 t</span>
+                        </div>
+                        <div class="bg-surface rounded-xl p-4 border border-border text-center">
+                            <span class="text-xs text-text-muted block mb-1">Capacidad</span>
+                            <span id="statCapacidad" class="text-2xl font-bold text-info font-mono">0%</span>
+                        </div>
+                    </div>
+                    <!-- Torres Grid -->
+                    <div id="panoramaContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+                    <p id="noPanorama" class="hidden text-text-muted text-center py-12 italic">No hay torres registradas</p>
+                </section>
+
+                <!-- ========== SECTION: HISTORIAL ========== -->
+                <section id="historial" class="section hidden">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-bold text-accent">Historial de Movimientos</h2>
+                    </div>
+                    <!-- Filters -->
+                    <div class="flex gap-3 mb-6">
+                        <div class="flex-1 relative">
+                            <img src="icons/SVG/calendar-full.svg" class="w-4 h-4 brightness-0 invert absolute left-3 top-1/2 -translate-y-1/2 opacity-50" alt="">
+                            <input type="date" id="filtroFecha" class="w-full bg-surface border border-border rounded-lg pl-10 pr-4 py-3 text-text text-sm focus:outline-none focus:border-accent transition-colors min-h-[48px]">
+                        </div>
+                        <button onclick="limpiarFiltros()" class="flex items-center gap-2 bg-surface hover:bg-surface-hover text-text px-4 py-3 rounded-lg text-sm font-medium transition-colors border border-border min-h-[48px]">
+                            Limpiar
+                        </button>
+                    </div>
+                    <div id="historialContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                    <p id="noMovimientos" class="hidden text-text-muted text-center py-12 italic">No hay movimientos registrados</p>
+                </section>
+
+                <!-- ========== SECTION: CONFIGURACIÓN ========== -->
+                <section id="config" class="section hidden">
+                    <h2 class="text-lg font-bold text-accent mb-6">Configuración</h2>
+                    <!-- User Profile Card -->
+                    <div class="bg-surface rounded-xl p-6 border border-border mb-6">
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="w-16 h-16 rounded-full bg-accent/20 border-2 border-accent flex items-center justify-center shrink-0">
+                                <img src="icons/SVG/user.svg" class="w-8 h-8 brightness-0 invert" alt="">
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-lg">Admin</h3>
+                                <p class="text-text-muted text-sm">admin@flejes.com</p>
+                                <span class="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-accent/20 text-accent">Administrador</span>
+                            </div>
+                        </div>
+                        <div class="space-y-3">
+                            <button class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-surface-hover transition-colors min-h-[48px] text-left">
+                                <img src="icons/SVG/user.svg" class="w-5 h-5 brightness-0 invert opacity-50" alt="">
+                                <span class="text-sm">Mi Perfil</span>
+                                <img src="icons/SVG/chevron-right.svg" class="w-4 h-4 brightness-0 invert opacity-30 ml-auto" alt="">
+                            </button>
+                            <button class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-surface-hover transition-colors min-h-[48px] text-left">
+                                <img src="icons/SVG/lock.svg" class="w-5 h-5 brightness-0 invert opacity-50" alt="">
+                                <span class="text-sm">Cambiar Contraseña</span>
+                                <img src="icons/SVG/chevron-right.svg" class="w-4 h-4 brightness-0 invert opacity-30 ml-auto" alt="">
+                            </button>
+                        </div>
+                    </div>
+                    <!-- App Settings -->
+                    <div class="bg-surface rounded-xl p-6 border border-border">
+                        <h3 class="font-bold text-sm text-text-muted mb-4 uppercase tracking-wider">Aplicación</h3>
+                        <div class="space-y-3">
+                            <button class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-surface-hover transition-colors min-h-[48px] text-left">
+                                <img src="icons/SVG/cog.svg" class="w-5 h-5 brightness-0 invert opacity-50" alt="">
+                                <span class="text-sm">Preferencias</span>
+                                <img src="icons/SVG/chevron-right.svg" class="w-4 h-4 brightness-0 invert opacity-30 ml-auto" alt="">
+                            </button>
+                            <button class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-surface-hover transition-colors min-h-[48px] text-left">
+                                <img src="icons/SVG/database.svg" class="w-5 h-5 brightness-0 invert opacity-50" alt="">
+                                <span class="text-sm">Exportar Datos</span>
+                                <img src="icons/SVG/chevron-right.svg" class="w-4 h-4 brightness-0 invert opacity-30 ml-auto" alt="">
+                            </button>
+                            <div class="pt-3 border-t border-border">
+                                <p class="text-text-muted text-xs text-center">Sistema de Flejes v1.0</p>
                             </div>
                         </div>
                     </div>
+                </section>
+            </main>
+        </div>
 
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
+        <!-- ==================== BOTTOM NAV (mobile) ==================== -->
+        <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border z-30 flex">
+            <button onclick="navigateTo('torres')" data-nav="torres" class="bottom-nav-item flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors">
+                <img src="icons/SVG/store.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                <span class="text-[10px] font-medium">Torres</span>
+            </button>
+            <button onclick="navigateTo('panorama')" data-nav="panorama" class="bottom-nav-item flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors">
+                <img src="icons/SVG/chart-bars.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                <span class="text-[10px] font-medium">Panorama</span>
+            </button>
+            <button onclick="navigateTo('historial')" data-nav="historial" class="bottom-nav-item flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors">
+                <img src="icons/SVG/history.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                <span class="text-[10px] font-medium">Historial</span>
+            </button>
+            <button onclick="navigateTo('config')" data-nav="config" class="bottom-nav-item flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors">
+                <img src="icons/SVG/cog.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                <span class="text-[10px] font-medium">Config</span>
+            </button>
+        </nav>
+    </div>
 
-                    <div class="torre-options">
-                        <button class="btn btn-secondary" onclick="editarTorreDetalle()">✏️ Editar Torre</button>
-                        <button class="btn btn-warning" onclick="abrirModalTrasladar()">📦 Salida / Consumo</button>
-                    </div>
-
-                    <h4 class="section-subtitle">Flejes Almacenados</h4>
-                    <div id="flejesRegistrados" class="flejes-grid"></div>
-                    <p id="sinFlejes" class="no-data-small hidden">No hay flejes en esta torre</p>
-
-                    <div id="formFleje" class="form-fleje">
-                        <h4>Agregar Nuevo Fleje</h4>
-                        <div class="form-inline">
-                            <div class="form-group">
-                                <label>Peso (kg)</label>
-                                <input type="number" id="pesoFleje" step="0.01" min="0.01" placeholder="0.00">
-                            </div>
-                            <button type="button" class="btn btn-success" onclick="agregarFleje()">+ Agregar</button>
-                        </div>
-                    </div>
-                    <p id="limiteAlcanzado" class="limite-texto hidden">✅ Límite alcanzado</p>
-
-                    <div class="torre-resumen">
-                        <div class="resumen-item">
-                            <span>Total Peso:</span>
-                            <strong id="totalPesoTorre">0.00 kg</strong>
-                        </div>
-                        <div class="resumen-item">
-                            <span>Promedio:</span>
-                            <strong id="promedioPeso">0.00 kg</strong>
-                        </div>
-                    </div>
+    <!-- ==================== MODAL: SALIDA / CONSUMO ==================== -->
+    <div id="modalTrasladar" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-surface rounded-xl w-full max-w-md border border-border shadow-2xl">
+            <div class="flex items-center justify-between p-5 border-b border-border">
+                <h3 class="font-bold text-base">Salida / Consumo</h3>
+                <button onclick="cerrarModalTrasladar()" class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-surface-hover transition-colors">
+                    <img src="icons/SVG/cross.svg" class="w-5 h-5 brightness-0 invert opacity-50" alt="">
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-text-muted mb-1.5">Seleccionar Fleje</label>
+                    <select id="flejeSelect" class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text focus:outline-none focus:border-accent transition-colors min-h-[48px]">
+                        <option value="">-- Seleccionar --</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-text-muted mb-1.5">Motivo</label>
+                    <select id="motivoTraslado" class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text focus:outline-none focus:border-accent transition-colors min-h-[48px]">
+                        <option value="consumo">Consumo</option>
+                        <option value="devolucion">Devolución</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-text-muted mb-1.5">Número de Solicitud</label>
+                    <input type="text" id="numSolicitud" placeholder="Ej: SOL-001" class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent transition-colors min-h-[48px]">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-text-muted mb-1.5">Nombre Completo - Despachador</label>
+                    <input type="text" id="despachador" placeholder="Ej: Juan Pérez López" class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:border-accent transition-colors min-h-[48px]">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-text-muted mb-1.5">Fecha y Hora de Inicio</label>
+                    <input type="datetime-local" id="horaInicio" class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text focus:outline-none focus:border-accent transition-colors min-h-[48px]">
                 </div>
             </div>
-        </section>
+            <div class="flex gap-3 p-5 border-t border-border">
+                <button onclick="cerrarModalTrasladar()" class="flex-1 bg-surface-hover hover:bg-border text-text px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">Cancelar</button>
+                <button onclick="confirmarTraslado()" class="flex-1 bg-danger hover:bg-red-700 text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">Confirmar</button>
+            </div>
+        </div>
+    </div>
 
-        <!-- Modal Salida/Consumo -->
-        <div id="modalTrasladar" class="modal hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>📦 Salida / Consumo</h3>
-                    <button class="modal-close" onclick="cerrarModalTrasladar()">×</button>
+    <!-- ==================== MODAL: EDITAR TORRE ==================== -->
+    <div id="modalEditarTorre" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-surface rounded-xl w-full max-w-md border border-border shadow-2xl">
+            <div class="flex items-center justify-between p-5 border-b border-border">
+                <h3 class="font-bold text-base">Editar Torre</h3>
+                <button onclick="cerrarModalEditar()" class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-surface-hover transition-colors">
+                    <img src="icons/SVG/cross.svg" class="w-5 h-5 brightness-0 invert opacity-50" alt="">
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-text-muted mb-1.5">Posición</label>
+                    <input type="text" id="editPosicion" class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text focus:outline-none focus:border-accent transition-colors min-h-[48px]">
                 </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>Seleccionar Fleje</label>
-                        <select id="flejeSelect"><option value="">-- Seleccionar --</option></select>
+                <div>
+                    <label class="block text-sm font-medium text-text-muted mb-1.5">Nombre Medida</label>
+                    <input type="text" id="editMedida" class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text focus:outline-none focus:border-accent transition-colors min-h-[48px]">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-text-muted mb-1.5">Cantidad Máxima</label>
+                    <input type="number" id="editMaxima" min="1" class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text focus:outline-none focus:border-accent transition-colors min-h-[48px]">
+                </div>
+            </div>
+            <div class="flex gap-3 p-5 border-t border-border">
+                <button onclick="cerrarModalEditar()" class="flex-1 bg-surface-hover hover:bg-border text-text px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">Cancelar</button>
+                <button onclick="guardarEdicionTorre()" class="flex-1 bg-accent hover:bg-accent-hover text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: DETALLE TORRE (responsive) ==================== -->
+    <div id="vistaDetalle" class="hidden fixed inset-0 z-50 bg-surface md:bg-black/60 md:backdrop-blur-sm overflow-y-auto">
+        <div class="w-full h-full md:h-auto md:max-w-lg md:mx-auto md:my-8 md:bg-surface md:rounded-xl md:border md:border-border md:shadow-2xl">
+            <!-- Header -->
+            <div class="sticky top-0 bg-surface z-10 flex items-center gap-3 p-4 md:p-5 border-b border-border">
+                <button onclick="volverLista()" class="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg hover:bg-surface-hover transition-colors">
+                    <img src="icons/SVG/arrow-left.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                </button>
+                <h2 class="text-lg font-bold text-accent flex-1">Detalle de Torre</h2>
+            </div>
+            <!-- Content -->
+            <div class="p-4 md:p-5 space-y-5">
+                <!-- Header info -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 id="detailPosicion" class="text-2xl font-bold text-accent"></h3>
+                        <p id="detailMedida" class="text-text-muted"></p>
                     </div>
-                    <div class="form-group">
-                        <label>Motivo</label>
-                        <select id="motivoTraslado">
-                            <option value="consumo">Consumo</option>
-                            <option value="devolucion">Devolución</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Número de Solicitud</label>
-                        <input type="text" id="numSolicitud" placeholder="Ej: SOL-001">
-                    </div>
-                    <div class="form-group">
-                        <label>Nombre Completo - Despachador</label>
-                        <input type="text" id="despachador" placeholder="Ej: Juan Pérez López">
-                    </div>
-                    <div class="form-group">
-                        <label>Fecha y Hora de Inicio</label>
-                        <input type="datetime-local" id="horaInicio">
+                    <div class="text-right bg-bg rounded-xl px-5 py-3 border border-border">
+                        <span class="text-xs text-text-muted block">Flejes</span>
+                        <div class="text-xl font-bold font-mono">
+                            <span id="counterActual" class="text-accent">0</span>
+                            <span class="text-text-muted">/</span>
+                            <span id="counterMaximo" class="text-text-muted">0</span>
+                        </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="cerrarModalTrasladar()">Cancelar</button>
-                    <button class="btn btn-danger" onclick="confirmarTraslado()">Confirmar</button>
+                <!-- Progress -->
+                <div class="h-2.5 bg-bg rounded-full overflow-hidden">
+                    <div id="progressFill" class="h-full bg-accent rounded-full transition-all duration-500"></div>
+                </div>
+                <!-- Actions -->
+                <div class="flex gap-3">
+                    <button onclick="editarTorreDetalle()" class="flex-1 flex items-center justify-center gap-2 bg-surface-hover hover:bg-border text-text px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">
+                        <img src="icons/SVG/pencil.svg" class="w-4 h-4 brightness-0 invert" alt="">
+                        Editar
+                    </button>
+                    <button onclick="abrirModalTrasladar()" class="flex-1 flex items-center justify-center gap-2 bg-warning/20 hover:bg-warning/30 text-warning px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">
+                        <img src="icons/SVG/inbox.svg" class="w-4 h-4 brightness-0 invert" alt="">
+                        Salida / Consumo
+                    </button>
+                </div>
+                <!-- Flejes -->
+                <div>
+                    <h4 class="text-sm font-medium text-text-muted mb-3">Flejes Almacenados</h4>
+                    <div id="flejesRegistrados" class="grid grid-cols-3 sm:grid-cols-4 gap-3"></div>
+                    <p id="sinFlejes" class="hidden text-text-muted text-center py-6 text-sm italic">No hay flejes en esta torre</p>
+                </div>
+                <!-- Agregar Fleje -->
+                <div id="formFleje" class="bg-info/10 rounded-xl p-4 border border-info/20">
+                    <h4 class="text-sm font-medium text-info mb-3">Agregar Nuevo Fleje</h4>
+                    <div class="flex gap-3 items-end">
+                        <div class="flex-1">
+                            <label class="block text-xs text-text-muted mb-1">Peso (kg)</label>
+                            <input type="number" id="pesoFleje" step="0.01" min="0.01" placeholder="0.00" class="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text placeholder:text-text-muted/50 focus:outline-none focus:border-info transition-colors min-h-[48px] font-mono">
+                        </div>
+                        <button type="button" onclick="agregarFleje()" class="flex items-center justify-center gap-2 bg-accent hover:bg-accent-hover text-white px-5 py-3 rounded-lg text-sm font-medium transition-colors min-h-[48px]">
+                            <img src="icons/SVG/plus-circle.svg" class="w-5 h-5 brightness-0 invert" alt="">
+                        </button>
+                    </div>
+                </div>
+                <p id="limiteAlcanzado" class="hidden bg-accent/20 text-accent text-center py-3 rounded-lg text-sm font-medium">
+                    Límite alcanzado
+                </p>
+                <!-- Resumen -->
+                <div class="bg-warning/10 rounded-xl p-4 border border-warning/20">
+                    <div class="flex justify-between items-center">
+                        <span class="text-text-muted text-sm">Total Peso:</span>
+                        <strong id="totalPesoTorre" class="text-warning font-mono">0.00 kg</strong>
+                    </div>
+                    <div class="flex justify-between items-center mt-2">
+                        <span class="text-text-muted text-sm">Promedio:</span>
+                        <strong id="promedioPeso" class="text-warning font-mono">0.00 kg</strong>
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Modal Editar Torre -->
-        <div id="modalEditarTorre" class="modal hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Editar Torre</h3>
-                    <button class="modal-close" onclick="cerrarModalEditar()">×</button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>Posición</label>
-                        <input type="text" id="editPosicion">
-                    </div>
-                    <div class="form-group">
-                        <label>Nombre Medida</label>
-                        <input type="text" id="editMedida">
-                    </div>
-                    <div class="form-group">
-                        <label>Cantidad Máxima</label>
-                        <input type="number" id="editMaxima" min="1">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="cerrarModalEditar()">Cancelar</button>
-                    <button class="btn btn-primary" onclick="guardarEdicionTorre()">Guardar</button>
-                </div>
-            </div>
-        </div>
+    <!-- ==================== LOADING OVERLAY ==================== -->
+    <div id="loadingOverlay" class="hidden fixed inset-0 z-[70] bg-bg/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+        <div class="w-12 h-12 border-4 border-surface-hover border-t-accent rounded-full animate-spin"></div>
+        <p class="text-text-muted text-sm">Cargando datos...</p>
+    </div>
 
-        <!-- Sección Panorama -->
-        <section id="panorama" class="section active">
-            <div class="panorama-header">
-                <h2>Estado del Almacén</h2>
-                <button class="btn btn-secondary" onclick="renderPanorama()">🔄 Actualizar</button>
-            </div>
-            <div class="panorama-stats">
-                <div class="stat-box">
-                    <span class="stat-label">Total Torres</span>
-                    <span class="stat-value" id="statTorres">0</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-label">Total Flejes</span>
-                    <span class="stat-value" id="statFlejes">0</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-label">Peso Total</span>
-                    <span class="stat-value" id="statPeso">0 t</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-label">Capacidad</span>
-                    <span class="stat-value" id="statCapacidad">0%</span>
-                </div>
-            </div>
-            <div id="panoramaContainer" class="panorama-grid"></div>
-            <p id="noPanorama" class="no-data">No hay torres registradas</p>
-        </section>
+    <!-- ==================== TOAST ==================== -->
+    <div id="toast" class="hidden fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg bg-accent text-white font-medium text-sm z-[60] shadow-lg shadow-accent/30 transition-all"></div>
 
-        <!-- Sección Historial -->
-        <section id="historial" class="section">
-            <h2>Historial de Movimientos</h2>
-            <div class="filters">
-                <input type="date" id="filtroFecha" class="filter-input">
-                <button class="btn btn-secondary" onclick="limpiarFiltros()">Limpiar</button>
-            </div>
-            <div id="historialContainer" class="historial-cards"></div>
-            <p id="noMovimientos" class="no-data">No hay movimientos registrados</p>
-        </section>
-    </main>
-
-    <div id="toast" class="toast hidden"></div>
-
+    <!-- ==================== SCRIPTS ==================== -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase.js"></script>
     <script src="app.js"></script>
