@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Flejes - Almacén de Acero</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>🏭 Sistema de Flejes</h1>
+        <p>Almacén de Acero - Control de Torres</p>
+    </header>
+
+    <nav class="tabs">
+        <button class="tab" data-tab="torres">Torres</button>
+        <button class="tab active" data-tab="panorama">Panorama</button>
+        <button class="tab" data-tab="historial">Historial</button>
+    </nav>
+
+    <main class="container">
+        <section id="torres" class="section">
+            <div id="vistaLista">
+                <div class="section-header">
+                    <h2>Seleccionar Torre</h2>
+                    <button class="btn btn-primary" onclick="mostrarFormulario()">+ Nueva Torre</button>
+                </div>
+                <div id="torresContainer" class="cards-container"></div>
+                <p id="noTorres" class="no-data">No hay torres registradas</p>
+            </div>
+
+            <div id="vistaFormulario" class="hidden">
+                <div class="section-header">
+                    <h2 id="formTitle">Nueva Torre</h2>
+                    <button class="btn btn-secondary" onclick="volverLista()">← Volver</button>
+                </div>
+                <form id="torreForm" class="form-card">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Posición</label>
+                            <input type="text" id="posicion" placeholder="Ej: P01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Nombre Medida</label>
+                            <input type="text" id="nombreMedida" placeholder="Ej: 304 x 2.00" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Cantidad Máxima de Flejes</label>
+                            <input type="number" id="cantidadMaxima" min="1" placeholder="Ej: 5" required>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="btnTorre">Guardar</button>
+                        <button type="button" class="btn btn-secondary" onclick="volverLista()">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="vistaDetalle" class="hidden">
+                <div class="section-header">
+                    <h2>Detalle de Torre</h2>
+                    <button class="btn btn-secondary" onclick="volverLista()">← Volver</button>
+                </div>
+                <div class="torre-detail">
+                    <div class="detail-header">
+                        <div class="detail-info">
+                            <h3 id="detailPosicion"></h3>
+                            <p id="detailMedida"></p>
+                        </div>
+                        <div class="detail-counter">
+                            <span class="counter-label">Flejes almacenados</span>
+                            <div class="counter-value">
+                                <span id="counterActual">0</span>
+                                <span class="counter-separator">/</span>
+                                <span id="counterMaximo">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+
+                    <div class="torre-options">
+                        <button class="btn btn-secondary" onclick="editarTorreDetalle()">✏️ Editar Torre</button>
+                        <button class="btn btn-warning" onclick="abrirModalTrasladar()">📦 Salida / Consumo</button>
+                    </div>
+
+                    <h4 class="section-subtitle">Flejes Almacenados</h4>
+                    <div id="flejesRegistrados" class="flejes-grid"></div>
+                    <p id="sinFlejes" class="no-data-small hidden">No hay flejes en esta torre</p>
+
+                    <div id="formFleje" class="form-fleje">
+                        <h4>Agregar Nuevo Fleje</h4>
+                        <div class="form-inline">
+                            <div class="form-group">
+                                <label>Peso (kg)</label>
+                                <input type="number" id="pesoFleje" step="0.01" min="0.01" placeholder="0.00">
+                            </div>
+                            <button type="button" class="btn btn-success" onclick="agregarFleje()">+ Agregar</button>
+                        </div>
+                    </div>
+                    <p id="limiteAlcanzado" class="limite-texto hidden">✅ Límite alcanzado</p>
+
+                    <div class="torre-resumen">
+                        <div class="resumen-item">
+                            <span>Total Peso:</span>
+                            <strong id="totalPesoTorre">0.00 kg</strong>
+                        </div>
+                        <div class="resumen-item">
+                            <span>Promedio:</span>
+                            <strong id="promedioPeso">0.00 kg</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Modal Salida/Consumo -->
+        <div id="modalTrasladar" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>📦 Salida / Consumo</h3>
+                    <button class="modal-close" onclick="cerrarModalTrasladar()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Seleccionar Fleje</label>
+                        <select id="flejeSelect"><option value="">-- Seleccionar --</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Motivo</label>
+                        <select id="motivoTraslado">
+                            <option value="consumo">Consumo</option>
+                            <option value="devolucion">Devolución</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Número de Solicitud</label>
+                        <input type="text" id="numSolicitud" placeholder="Ej: SOL-001">
+                    </div>
+                    <div class="form-group">
+                        <label>Nombre Completo - Despachador</label>
+                        <input type="text" id="despachador" placeholder="Ej: Juan Pérez López">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha y Hora de Inicio</label>
+                        <input type="datetime-local" id="horaInicio">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="cerrarModalTrasladar()">Cancelar</button>
+                    <button class="btn btn-danger" onclick="confirmarTraslado()">Confirmar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Editar Torre -->
+        <div id="modalEditarTorre" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Editar Torre</h3>
+                    <button class="modal-close" onclick="cerrarModalEditar()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Posición</label>
+                        <input type="text" id="editPosicion">
+                    </div>
+                    <div class="form-group">
+                        <label>Nombre Medida</label>
+                        <input type="text" id="editMedida">
+                    </div>
+                    <div class="form-group">
+                        <label>Cantidad Máxima</label>
+                        <input type="number" id="editMaxima" min="1">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="cerrarModalEditar()">Cancelar</button>
+                    <button class="btn btn-primary" onclick="guardarEdicionTorre()">Guardar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección Panorama -->
+        <section id="panorama" class="section active">
+            <div class="panorama-header">
+                <h2>Estado del Almacén</h2>
+                <button class="btn btn-secondary" onclick="renderPanorama()">🔄 Actualizar</button>
+            </div>
+            <div class="panorama-stats">
+                <div class="stat-box">
+                    <span class="stat-label">Total Torres</span>
+                    <span class="stat-value" id="statTorres">0</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Total Flejes</span>
+                    <span class="stat-value" id="statFlejes">0</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Peso Total</span>
+                    <span class="stat-value" id="statPeso">0 t</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Capacidad</span>
+                    <span class="stat-value" id="statCapacidad">0%</span>
+                </div>
+            </div>
+            <div id="panoramaContainer" class="panorama-grid"></div>
+            <p id="noPanorama" class="no-data">No hay torres registradas</p>
+        </section>
+
+        <!-- Sección Historial -->
+        <section id="historial" class="section">
+            <h2>Historial de Movimientos</h2>
+            <div class="filters">
+                <input type="date" id="filtroFecha" class="filter-input">
+                <button class="btn btn-secondary" onclick="limpiarFiltros()">Limpiar</button>
+            </div>
+            <div id="historialContainer" class="historial-cards"></div>
+            <p id="noMovimientos" class="no-data">No hay movimientos registrados</p>
+        </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
