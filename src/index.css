@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@theme {
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --color-bg: #0F172A;
+    --color-surface: #1E293B;
+    --color-surface-hover: #334155;
+    --color-border: #334155;
+    --color-text: #F8FAFC;
+    --color-text-muted: #94A3B8;
+    --color-accent: #059669;
+    --color-accent-hover: #047857;
+    --color-warning: #F59E0B;
+    --color-danger: #DC2626;
+    --color-info: #3B82F6;
+}
+
+/* Animations */
+.section {
+    animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes chipIn {
+    from { transform: scale(0.85); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translate(-50%, 16px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes toastIn {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Fleje chip animation */
+.fleje-chip {
+    animation: chipIn 0.25s ease;
+}
+
+/* Toast animation */
+.toast-show {
+    animation: toastIn 0.3s ease;
+}
+
+/* Sidebar active state */
+.sidebar-item.active {
+    background-color: rgba(5, 150, 105, 0.15);
+    color: #059669;
+}
+
+/* Bottom nav active state */
+.bottom-nav-item.active {
+    color: #059669;
+    border-top: 2px solid #059669;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+}
+
+/* Panorama fleje styling */
+.panorama-fleje.empty .panorama-fleje-peso {
+    color: rgba(255, 255, 255, 0.2);
+}
+.panorama-fleje.empty .panorama-fleje-numero {
+    color: rgba(255, 255, 255, 0.2);
+}
+
+/* Sidebar mobile toggle */
+@media (max-width: 767px) {
+    #sidebar {
+        display: none !important;
+    }
+    #sidebar.sidebar-open {
+        display: flex !important;
+        width: 100% !important;
+    }
+}
+
+/* Safe area for bottom nav on mobile */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    nav.md\:hidden {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+}

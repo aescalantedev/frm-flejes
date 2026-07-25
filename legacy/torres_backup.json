@@ -1,0 +1,240 @@
+[
+  {
+    "id": "fdddb2fa-75c8-4c40-a1e6-7d9a3a6f3951",
+    "posicion": "P01",
+    "nombre_medida": "304 X 2.0",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T20:41:19.390517"
+  },
+  {
+    "id": "3fc20a5f-9104-4a59-90f3-ba1b91288ab8",
+    "posicion": "P02",
+    "nombre_medida": "304 X 2.0",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T18:18:09.305084"
+  },
+  {
+    "id": "0e9dc2ef-b20c-4320-b75f-aabac1303641",
+    "posicion": "P03",
+    "nombre_medida": "304 X 2.0",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T20:41:15.547279"
+  },
+  {
+    "id": "538aad38-326f-45de-893c-b3e032c3e2ba",
+    "posicion": "P04",
+    "nombre_medida": "304 X 2.0",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T18:23:26.089647"
+  },
+  {
+    "id": "8a31a16f-7661-4592-9ab0-a73aa62bd905",
+    "posicion": "P05",
+    "nombre_medida": "284 X 2.0",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T18:27:05.546139"
+  },
+  {
+    "id": "189297d5-31df-431a-ba39-e6912fc4e3a6",
+    "posicion": "P06",
+    "nombre_medida": "284 X 2.0",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T18:25:09.709934"
+  },
+  {
+    "id": "6d8cb42f-9d82-49d2-b549-7376b1929c1b",
+    "posicion": "P07",
+    "nombre_medida": "284 X 2.0",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-20T22:28:07.277463"
+  },
+  {
+    "id": "97093403-f973-4b9c-8e40-5f47234af5d8",
+    "posicion": "P08",
+    "nombre_medida": "284 X 2.0",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T20:35:43.817845"
+  },
+  {
+    "id": "c61f3eaf-8399-4e5a-96fd-75dfab14a82a",
+    "posicion": "P09",
+    "nombre_medida": "VACIO",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T18:20:12.04667"
+  },
+  {
+    "id": "a744c700-1b9d-4bae-8f14-e8a4ddefc2d5",
+    "posicion": "P10",
+    "nombre_medida": "304 X 2.0",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T18:38:19.930209"
+  },
+  {
+    "id": "01c0a1c9-5e4a-4596-aacf-442c726fd44e",
+    "posicion": "P11",
+    "nombre_medida": "264 X 2.0",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T18:18:12.194072"
+  },
+  {
+    "id": "a083710c-b5df-484b-9aa2-278e6a3aceca",
+    "posicion": "P12",
+    "nombre_medida": "VACIO",
+    "cantidad_maxima": 5,
+    "created_at": "2026-07-21T18:22:07.16923"
+  },
+  {
+    "id": "220abd00-e5be-481b-99af-655219a1214c",
+    "posicion": "P13",
+    "nombre_medida": "MIXTO",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-21T21:52:42.445661"
+  },
+  {
+    "id": "4ffde61d-a3ca-4be6-915a-1703e24e0366",
+    "posicion": "P14",
+    "nombre_medida": "200 X 1.6",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-21T20:47:53.802923"
+  },
+  {
+    "id": "8eae1953-33ff-4e17-a5a2-829df44fb0e1",
+    "posicion": "P15",
+    "nombre_medida": "200 X 1.6",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-21T18:34:53.0872"
+  },
+  {
+    "id": "dc58edec-0e17-435e-80a5-75c91bc6079f",
+    "posicion": "P16",
+    "nombre_medida": "VACIO",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-21T18:20:39.90666"
+  },
+  {
+    "id": "af0c94a7-c356-47f3-b508-7cfee66385ec",
+    "posicion": "P17",
+    "nombre_medida": "170 X 1.6",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-21T18:29:05.711605"
+  },
+  {
+    "id": "5f6b1608-a2d3-4c63-a777-a8c94bb7684b",
+    "posicion": "P18",
+    "nombre_medida": "170 X 1.6",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-21T18:35:56.596686"
+  },
+  {
+    "id": "cb07e4d2-a4d7-4bd0-9ea9-9934d0bc0823",
+    "posicion": "P19",
+    "nombre_medida": "170 X 1.6",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-21T20:37:40.34953"
+  },
+  {
+    "id": "9f0c9508-a47f-41ad-91bb-88ae87902e36",
+    "posicion": "P20",
+    "nombre_medida": "170 X 1.6",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-21T18:26:23.545542"
+  },
+  {
+    "id": "362fa020-2b06-4ac4-a639-2e778979ede6",
+    "posicion": "P21",
+    "nombre_medida": "100 X 2.0",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-21T20:27:48.786179"
+  },
+  {
+    "id": "37a3dd92-88b9-416f-9ac7-52a053375cb8",
+    "posicion": "P22",
+    "nombre_medida": "224 X 1.6",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-20T23:12:48.836085"
+  },
+  {
+    "id": "71a6a551-e242-4b25-8d4c-b28c6aa06f3e",
+    "posicion": "P23",
+    "nombre_medida": "250 X 1.6",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-21T18:27:46.928549"
+  },
+  {
+    "id": "2fc3fcc5-5c54-45f2-8da2-9e8a3099df01",
+    "posicion": "P24",
+    "nombre_medida": "VACIO",
+    "cantidad_maxima": 7,
+    "created_at": "2026-07-21T20:41:15.80016"
+  },
+  {
+    "id": "cbf2ca65-6993-4b7b-89ba-0b07d14f934c",
+    "posicion": "P25",
+    "nombre_medida": "100 X 1.6",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-21T18:30:14.719854"
+  },
+  {
+    "id": "2faf31fe-e82b-41a2-9529-98537a312e05",
+    "posicion": "P26",
+    "nombre_medida": "100 X 1.6",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-20T23:11:39.587935"
+  },
+  {
+    "id": "220c193c-db64-4c07-bd93-b1c6842cf926",
+    "posicion": "P27",
+    "nombre_medida": "100 X 1.6",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-20T22:42:14.915741"
+  },
+  {
+    "id": "3b179bb3-8149-4916-bef5-95947c68ec08",
+    "posicion": "P28",
+    "nombre_medida": "100 X 1.6",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-21T18:22:51.125605"
+  },
+  {
+    "id": "ac0da5c5-c345-4d9b-a785-db17387c33d5",
+    "posicion": "P29",
+    "nombre_medida": "100 X 1.6",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-21T18:31:58.074077"
+  },
+  {
+    "id": "669e4827-182f-41ff-8efa-083defa82e6b",
+    "posicion": "P30",
+    "nombre_medida": "100 X 1.6",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-20T23:13:57.555643"
+  },
+  {
+    "id": "ca9f0967-7e08-489f-b988-da9ec187dd9d",
+    "posicion": "P31",
+    "nombre_medida": "100 X 1.6",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-21T18:21:21.719499"
+  },
+  {
+    "id": "3d5e82fd-3020-41f5-a018-234161b89392",
+    "posicion": "P32",
+    "nombre_medida": "100 X 1.6",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-21T20:30:01.648463"
+  },
+  {
+    "id": "d78a31c8-7a3a-416e-8c9e-5bc1d2549fe2",
+    "posicion": "P33",
+    "nombre_medida": "100 X 1.6",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-20T23:07:34.502933"
+  },
+  {
+    "id": "c1bd45e9-e2f1-46aa-a1dd-22dd22af1dfe",
+    "posicion": "P34",
+    "nombre_medida": "100 X 1.6",
+    "cantidad_maxima": 12,
+    "created_at": "2026-07-21T18:36:59.819427"
+  }
+]

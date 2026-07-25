@@ -1,0 +1,461 @@
+import React, { useState, useEffect } from 'react'
+import { User, Lock, Sliders, Database, Info, Paintbrush, Bell, Shield, HelpCircle, Check, LogOut } from 'lucide-react'
+import { themes, applyTheme } from '../lib/theme'
+
+export default function ConfigView({ userProfile, onUpdateProfile, showToast }) {
+  const [activeTab, setActiveTab] = useState('profile')
+  
+  // Profile state
+  const [profileName, setProfileName] = useState(userProfile?.name || 'Administrador')
+  const [profileEmail, setProfileEmail] = useState(userProfile?.email || 'admin@flejes.com')
+
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  // Preferences state
+  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('theme') || 'darkMinimal')
+  const [soundAlerts, setSoundAlerts] = useState(() => localStorage.getItem('soundAlerts') === 'true')
+  const [unitSystem, setUnitSystem] = useState(() => localStorage.getItem('unitSystem') || 'kg')
+
+  // Sync profile state when prop changes
+  useEffect(() => {
+    if (userProfile) {
+      setProfileName(userProfile.name)
+      setProfileEmail(userProfile.email)
+    }
+  }, [userProfile])
+
+  const handleSaveProfile = (e) => {
+    e.preventDefault()
+    if (!profileName.trim() || !profileEmail.trim()) {
+      showToast('Por favor, completa todos los campos del perfil', true)
+      return
+    }
+    onUpdateProfile({ name: profileName, email: profileEmail })
+    showToast('Perfil actualizado correctamente')
+  }
+
+  const handleChangePassword = (e) => {
+    e.preventDefault()
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showToast('Por favor, completa todos los campos de contraseña', true)
+      return
+    }
+    if (newPassword.length < 6) {
+      showToast('La nueva contraseña debe tener al menos 6 caracteres', true)
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      showToast('La confirmación de la contraseña no coincide', true)
+      return
+    }
+    
+    // Simulate API update
+    showToast('Contraseña actualizada exitosamente')
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+  }
+
+  const handleSelectTheme = (themeKey) => {
+    setCurrentTheme(themeKey)
+    applyTheme(themeKey)
+    showToast(`Tema cambiado a: ${themes[themeKey].name}`)
+  }
+
+  const handleToggleSound = () => {
+    const nextVal = !soundAlerts
+    setSoundAlerts(nextVal)
+    localStorage.setItem('soundAlerts', String(nextVal))
+    showToast(nextVal ? 'Alertas sonoras activadas' : 'Alertas sonoras desactivadas')
+  }
+
+  const handleUnitChange = (val) => {
+    setUnitSystem(val)
+    localStorage.setItem('unitSystem', val)
+    showToast(`Unidad de medida cambiada a: ${val === 'kg' ? 'Kilogramos' : 'Toneladas'}`)
+  }
+
+  const tabs = [
+    { id: 'profile', label: 'Mi Perfil', icon: User },
+    { id: 'password', label: 'Seguridad', icon: Lock },
+    { id: 'preferences', label: 'Preferencias', icon: Sliders },
+    { id: 'backup', label: 'Backup', icon: Database }
+  ]
+
+  return (
+    <div className="w-full max-w-4xl mx-auto space-y-6 min-w-0">
+      
+      {/* Title */}
+      <div className="flex items-center gap-3 border-b border-border/60 pb-4">
+        <Sliders className="w-5 h-5 text-accent" />
+        <h2 className="text-lg font-bold text-foreground tracking-tight">Configuración global</h2>
+      </div>
+
+      <div className="flex flex-col md:grid md:grid-cols-4 gap-6 w-full min-w-0">
+        
+        {/* Navigation Sidebar / Horizontal mobile bar */}
+        <div className="md:col-span-1 w-full min-w-0">
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex flex-col gap-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              const isActive = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`
+                    flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wide transition-all text-left cursor-pointer
+                    ${isActive 
+                      ? 'bg-accent/10 text-accent' 
+                      : 'text-text-muted hover:bg-surface-hover hover:text-foreground'
+                    }
+                  `}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Mobile Scrollable Tabs */}
+          <div className="md:hidden flex overflow-x-auto gap-1 border-b border-border/60 pb-2 w-full">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              const isActive = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`
+                    flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer
+                    ${isActive 
+                      ? 'bg-accent/10 text-accent' 
+                      : 'text-text-muted hover:bg-surface-hover'
+                    }
+                  `}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="md:col-span-3 w-full min-w-0">
+          
+          {/* TAB: PROFILE */}
+          {activeTab === 'profile' && (
+            <div className="bg-surface border border-border rounded-2xl p-6 shadow-xs space-y-6 animate-fadeIn">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Perfil de Usuario</h3>
+                <p className="text-[11px] text-text-muted">Actualiza tus datos de operador e identificación.</p>
+              </div>
+
+              <form onSubmit={handleSaveProfile} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Nombre Completo</label>
+                    <input 
+                      type="text" 
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl px-4 py-2.5 text-xs outline-none text-foreground font-medium transition-colors"
+                      placeholder="Ej. Juan Pérez"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Correo Electrónico</label>
+                    <input 
+                      type="email" 
+                      value={profileEmail}
+                      onChange={(e) => setProfileEmail(e.target.value)}
+                      className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl px-4 py-2.5 text-xs outline-none text-foreground font-medium transition-colors"
+                      placeholder="Ej. juan@empresa.com"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1">
+                      <Shield className="w-3.5 h-3.5 text-text-muted/60" />
+                      Rol de Permisos
+                    </label>
+                    <input 
+                      type="text" 
+                      value="Super Administrador" 
+                      disabled
+                      className="w-full bg-bg/50 border border-border/40 rounded-xl px-4 py-2.5 text-xs text-text-muted/60 font-medium cursor-not-allowed select-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1">
+                      <Info className="w-3.5 h-3.5 text-text-muted/60" />
+                      Sede Física
+                    </label>
+                    <input 
+                      type="text" 
+                      value="Planta Central - Lima" 
+                      disabled
+                      className="w-full bg-bg/50 border border-border/40 rounded-xl px-4 py-2.5 text-xs text-text-muted/60 font-medium cursor-not-allowed select-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border/60 flex justify-between items-center gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => alert('Cerrar sesión')}
+                    className="md:hidden flex items-center justify-center gap-2 bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-destructive text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer transition-all"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Cerrar sesión</span>
+                  </button>
+                  <button 
+                    type="submit"
+                    className="bg-accent hover:bg-accent-hover text-white text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer shadow-xs transition-colors ml-auto"
+                  >
+                    Guardar Cambios
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* TAB: PASSWORD */}
+          {activeTab === 'password' && (
+            <div className="bg-surface border border-border rounded-2xl p-6 shadow-xs space-y-6 animate-fadeIn">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Seguridad de la Cuenta</h3>
+                <p className="text-[11px] text-text-muted">Modifica tu contraseña de acceso para resguardar tu cuenta.</p>
+              </div>
+
+              <form onSubmit={handleChangePassword} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Contraseña Actual</label>
+                  <input 
+                    type="password" 
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl px-4 py-2.5 text-xs outline-none text-foreground transition-colors font-mono"
+                    placeholder="••••••••"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Nueva Contraseña</label>
+                    <input 
+                      type="password" 
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl px-4 py-2.5 text-xs outline-none text-foreground transition-colors font-mono"
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Confirmar Nueva Contraseña</label>
+                    <input 
+                      type="password" 
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl px-4 py-2.5 text-xs outline-none text-foreground transition-colors font-mono"
+                      placeholder="Repite la contraseña"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border/60 flex justify-end">
+                  <button 
+                    type="submit"
+                    className="bg-accent hover:bg-accent-hover text-white text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer shadow-xs transition-colors"
+                  >
+                    Actualizar Contraseña
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* TAB: PREFERENCES */}
+          {activeTab === 'preferences' && (
+            <div className="bg-surface border border-border rounded-2xl p-6 shadow-xs space-y-6 animate-fadeIn">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Preferencias de la Interfaz</h3>
+                <p className="text-[11px] text-text-muted">Personaliza la apariencia y comportamiento de tu aplicación.</p>
+              </div>
+
+              {/* Theme Picker */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1">
+                  <Paintbrush className="w-3.5 h-3.5 text-text-muted/60" />
+                  Tema de Colores (Material 3 / Minimal)
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {Object.entries(themes).map(([key, theme]) => {
+                    const isSelected = currentTheme === key
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => handleSelectTheme(key)}
+                        className={`
+                          p-3 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between h-20 group relative overflow-hidden
+                          ${isSelected 
+                            ? 'border-accent bg-accent/5 ring-1 ring-accent' 
+                            : 'border-border bg-bg/50 hover:bg-surface-hover hover:border-border/80'
+                          }
+                        `}
+                      >
+                        <span className="text-[10px] font-bold text-foreground group-hover:text-accent transition-colors truncate w-full z-10">
+                          {theme.name}
+                        </span>
+                        
+                        {/* Theme Colors Preview */}
+                        <div className="flex gap-1.5 mt-auto z-10">
+                          <span className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: theme.colors.bg }} title="Background" />
+                          <span className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: theme.colors.surface }} title="Surface" />
+                          <span className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: theme.colors.accent }} title="Accent" />
+                        </div>
+
+                        {isSelected && (
+                          <div className="absolute right-2 bottom-2 w-4 h-4 rounded-full bg-accent text-white flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5" />
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* General Options */}
+              <div className="border-t border-border/60 pt-6 space-y-4">
+                
+                {/* Audio Alert Toggle */}
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-3">
+                    <Bell className="w-4.5 h-4.5 text-text-muted" />
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Alertas de Sonido</p>
+                      <p className="text-[10px] text-text-muted">Reproducir alertas auditivas para mensajes de confirmación.</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleToggleSound}
+                    className={`
+                      w-10 h-6 rounded-full p-0.5 transition-colors duration-200 cursor-pointer relative outline-none
+                      ${soundAlerts ? 'bg-accent' : 'bg-border/80'}
+                    `}
+                  >
+                    <span 
+                      className={`
+                        block w-5 h-5 rounded-full bg-white shadow-xs transition-transform duration-200
+                        ${soundAlerts ? 'translate-x-4' : 'translate-x-0'}
+                      `}
+                    />
+                  </button>
+                </div>
+
+                {/* Weight Units Selector */}
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-3">
+                    <Database className="w-4.5 h-4.5 text-text-muted" />
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Unidad de Medida Principal</p>
+                      <p className="text-[10px] text-text-muted">Configura si los listados se consolidan en kilogramos o toneladas.</p>
+                    </div>
+                  </div>
+                  <div className="flex bg-bg p-0.5 border border-border rounded-xl">
+                    <button 
+                      onClick={() => handleUnitChange('kg')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                        unitSystem === 'kg' 
+                          ? 'bg-surface text-accent shadow-xs' 
+                          : 'text-text-muted hover:text-foreground'
+                      }`}
+                    >
+                      KG
+                    </button>
+                    <button 
+                      onClick={() => handleUnitChange('t')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                        unitSystem === 't' 
+                          ? 'bg-surface text-accent shadow-xs' 
+                          : 'text-text-muted hover:text-foreground'
+                      }`}
+                    >
+                      TN (t)
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB: BACKUP */}
+          {activeTab === 'backup' && (
+            <div className="bg-surface border border-border rounded-2xl p-6 shadow-xs space-y-6 animate-fadeIn">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Copias de Seguridad</h3>
+                <p className="text-[11px] text-text-muted">Resguarda tu base de datos o restaura registros históricos en lote.</p>
+              </div>
+
+              <div className="p-4 border border-border/80 bg-surface-hover/30 rounded-xl flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-foreground">Respaldar Inventario en JSON</p>
+                  <p className="text-[10px] text-text-muted">Descarga un archivo local conteniendo las torres y los flejes actuales.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    // Create simulated download
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ date: new Date().toISOString(), system: 'Sistema de Flejes v2.0' }))
+                    const downloadAnchor = document.createElement('a')
+                    downloadAnchor.setAttribute("href", dataStr)
+                    downloadAnchor.setAttribute("download", `backup_flejes_${new Date().toISOString().split('T')[0]}.json`)
+                    document.body.appendChild(downloadAnchor)
+                    downloadAnchor.click()
+                    downloadAnchor.remove()
+                    showToast('Copia de seguridad descargada exitosamente')
+                  }}
+                  className="bg-accent/10 hover:bg-accent/20 border border-accent/30 text-accent text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer w-full sm:w-auto text-center"
+                >
+                  Exportar JSON
+                </button>
+              </div>
+
+              <div className="p-4 border border-border/80 bg-surface-hover/30 rounded-xl flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-foreground">Importar Registros Externos</p>
+                  <p className="text-[10px] text-text-muted">Carga un archivo de respaldo previamente exportado.</p>
+                </div>
+                <button
+                  onClick={() => alert('Selecciona el archivo JSON de respaldo para continuar')}
+                  className="bg-surface-hover hover:bg-border/60 border border-border text-text-muted hover:text-foreground text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer w-full sm:w-auto text-center"
+                >
+                  Cargar Archivo
+                </button>
+              </div>
+            </div>
+          )}
+
+        </div>
+
+      </div>
+
+      {/* Footer Info */}
+      <div className="flex items-center justify-center gap-1.5 text-[10px] text-text-muted font-semibold uppercase tracking-wider py-4 border-t border-border/40">
+        <Info className="w-3.5 h-3.5 text-text-muted/60" />
+        <span>Sistema de Flejes v2.0 • Material 3 Design</span>
+      </div>
+
+    </div>
+  )
+}
