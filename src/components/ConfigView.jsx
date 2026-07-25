@@ -1,13 +1,56 @@
 import React, { useState, useEffect } from 'react'
 import { User, Lock, Sliders, Database, Info, Paintbrush, Bell, Shield, HelpCircle, Check, LogOut } from 'lucide-react'
 import { themes, applyTheme } from '../lib/theme'
+import { supabase } from '../lib/supabase'
 
-export default function ConfigView({ userProfile, onUpdateProfile, showToast }) {
+export default function ConfigView({ userProfile, onUpdateProfile, onLogout, showToast }) {
   const [activeTab, setActiveTab] = useState('profile')
   
   // Profile state
   const [profileName, setProfileName] = useState(userProfile?.name || 'Administrador')
   const [profileEmail, setProfileEmail] = useState(userProfile?.email || 'admin@flejes.com')
+
+  // User Management state
+  const [profilesList, setProfilesList] = useState([])
+  const [loadingProfiles, setLoadingProfiles] = useState(false)
+
+  const fetchProfiles = async () => {
+    setLoadingProfiles(true)
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: true })
+      if (!error && data) {
+        setProfilesList(data)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingProfiles(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'users' && userProfile?.rol === 'Administrador') {
+      fetchProfiles()
+    }
+  }, [activeTab])
+
+  const handleChangeUserRole = async (userId, newRole) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ rol: newRole })
+        .eq('id', userId)
+      if (error) throw error
+      showToast('Rol de usuario actualizado con éxito')
+      fetchProfiles()
+    } catch (err) {
+      console.error(err)
+      showToast('Error al actualizar rol de usuario', true)
+    }
+  }
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -81,9 +124,13 @@ export default function ConfigView({ userProfile, onUpdateProfile, showToast }) 
   const tabs = [
     { id: 'profile', label: 'Mi Perfil', icon: User },
     { id: 'password', label: 'Seguridad', icon: Lock },
-    { id: 'preferences', label: 'Preferencias', icon: Sliders },
-    { id: 'backup', label: 'Backup', icon: Database }
+    { id: 'preferences', label: 'Preferencias', icon: Sliders }
   ]
+  
+  if (userProfile?.rol === 'Administrador') {
+    tabs.push({ id: 'backup', label: 'Backup', icon: Database })
+    tabs.push({ id: 'users', label: 'Usuarios y Roles', icon: Shield })
+  }
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6 min-w-0">
@@ -190,9 +237,9 @@ export default function ConfigView({ userProfile, onUpdateProfile, showToast }) 
                     </label>
                     <input 
                       type="text" 
-                      value="Super Administrador" 
+                      value={userProfile?.rol || 'Operador'} 
                       disabled
-                      className="w-full bg-bg/50 border border-border/40 rounded-xl px-4 py-2.5 text-xs text-text-muted/60 font-medium cursor-not-allowed select-none"
+                      className="w-full bg-bg/50 border border-border/40 rounded-xl px-4 py-2.5 text-xs text-text-muted/60 font-semibold cursor-not-allowed select-none capitalize"
                     />
                   </div>
                   <div className="space-y-1">
@@ -202,9 +249,9 @@ export default function ConfigView({ userProfile, onUpdateProfile, showToast }) 
                     </label>
                     <input 
                       type="text" 
-                      value="Planta Central - Lima" 
+                      value="Planta Chilca - Lima" 
                       disabled
-                      className="w-full bg-bg/50 border border-border/40 rounded-xl px-4 py-2.5 text-xs text-text-muted/60 font-medium cursor-not-allowed select-none"
+                      className="w-full bg-bg/50 border border-border/40 rounded-xl px-4 py-2.5 text-xs text-text-muted/60 font-semibold cursor-not-allowed select-none"
                     />
                   </div>
                 </div>
@@ -212,7 +259,7 @@ export default function ConfigView({ userProfile, onUpdateProfile, showToast }) 
                 <div className="pt-4 border-t border-border/60 flex justify-between items-center gap-2">
                   <button 
                     type="button"
-                    onClick={() => alert('Cerrar sesión')}
+                    onClick={onLogout}
                     className="md:hidden flex items-center justify-center gap-2 bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-destructive text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer transition-all"
                   >
                     <LogOut className="w-4 h-4" />
@@ -443,6 +490,76 @@ export default function ConfigView({ userProfile, onUpdateProfile, showToast }) 
                   Cargar Archivo
                 </button>
               </div>
+            </div>
+          )}
+          {/* TAB: USERS & ROLES */}
+          {activeTab === 'users' && userProfile?.rol === 'Administrador' && (
+            <div className="bg-surface border border-border rounded-2xl p-6 shadow-xs space-y-6 animate-fadeIn">
+              <div className="flex justify-between items-center border-b border-border/40 pb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Gestión de Usuarios y Roles</h3>
+                  <p className="text-[11px] text-text-muted">Administra los permisos de los operadores de la planta.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchProfiles}
+                  disabled={loadingProfiles}
+                  className="bg-bg hover:bg-surface-hover text-text-muted hover:text-foreground text-xs font-semibold px-3 py-1.5 rounded-xl border border-border cursor-pointer transition-colors"
+                >
+                  Refrescar Lista
+                </button>
+              </div>
+
+              {loadingProfiles ? (
+                <div className="text-center py-12 text-xs text-text-muted animate-pulse font-semibold">
+                  Cargando listado de usuarios...
+                </div>
+              ) : profilesList.length === 0 ? (
+                <div className="text-center py-12 text-xs text-text-muted italic border border-dashed border-border rounded-2xl bg-bg/25">
+                  No hay usuarios registrados en la base de datos de perfiles.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-border/60 text-text-muted font-bold">
+                        <th className="py-2.5 px-3">Nombre</th>
+                        <th className="py-2.5 px-3">Correo Electrónico</th>
+                        <th className="py-2.5 px-3">Rol de Acceso</th>
+                        <th className="py-2.5 px-3 text-right">Fecha Registro</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/20">
+                      {profilesList.map((user) => {
+                        const isSelf = user.id === userProfile.id
+                        return (
+                          <tr key={user.id} className="hover:bg-bg/20 transition-colors font-medium">
+                            <td className="py-3.5 px-3 text-foreground font-bold">{user.name} {isSelf && <span className="text-[9px] bg-accent/15 text-accent px-1.5 py-0.5 rounded-md ml-1 font-semibold">Tú</span>}</td>
+                            <td className="py-3.5 px-3 text-text-muted font-mono">{user.email}</td>
+                            <td className="py-3.5 px-3">
+                              <select
+                                value={user.rol}
+                                disabled={isSelf}
+                                onChange={(e) => handleChangeUserRole(user.id, e.target.value)}
+                                className={`
+                                  bg-bg border border-border text-foreground rounded-lg py-1 px-2.5 text-[11px] outline-none cursor-pointer font-semibold
+                                  ${isSelf ? 'opacity-60 cursor-not-allowed select-none bg-bg/50' : 'hover:border-accent'}
+                                `}
+                              >
+                                <option value="Operador">Operador (Planta)</option>
+                                <option value="Administrador">Administrador</option>
+                              </select>
+                            </td>
+                            <td className="py-3.5 px-3 text-right text-text-muted font-mono">
+                              {new Date(user.created_at).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

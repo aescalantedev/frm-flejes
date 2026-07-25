@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from './lib/supabase'
 import { 
@@ -19,18 +19,71 @@ import PanoramaView from './components/PanoramaView'
 import TorresView from './components/TorresView'
 import HistorialView from './components/HistorialView'
 import ConfigView from './components/ConfigView'
+import LoginScreen from './components/LoginScreen'
 import DetailDrawer from './components/DetailDrawer'
 import TrasladoModal from './components/TrasladoModal'
 import TorreFormModal from './components/TorreFormModal'
+import SessionInitModal from './components/SessionInitModal'
+import BatchIngresoModal from './components/BatchIngresoModal'
+import ConfirmSessionModal from './components/ConfirmSessionModal'
+import SessionBanner from './components/SessionBanner'
 
 function App() {
   const queryClient = useQueryClient()
 
-  // User profile state loaded from localStorage
-  const [userProfile, setUserProfile] = useState(() => {
-    const saved = localStorage.getItem('userProfile')
-    return saved ? JSON.parse(saved) : { name: 'Administrador', email: 'admin@flejes.com' }
-  })
+  const [session, setSession] = useState(null)
+  const [userProfile, setUserProfile] = useState(null)
+  const [loadingAuth, setLoadingAuth] = useState(true)
+
+  // Escuchar estado de autenticación y cargar perfil de Supabase
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      if (session) {
+        fetchProfile(session.user.id, session.user.email)
+      } else {
+        setLoadingAuth(false)
+      }
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+      if (session) {
+        fetchProfile(session.user.id, session.user.email)
+      } else {
+        setUserProfile(null)
+        setLoadingAuth(false)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const fetchProfile = async (userId, userEmail) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      
+      if (!error && data) {
+        setUserProfile(data)
+      } else {
+        // Fallback en caso de retardo de sincronización de la DB
+        setUserProfile({
+          id: userId,
+          name: 'Operador de Planta',
+          email: userEmail,
+          rol: 'Operador'
+        })
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingAuth(false)
+    }
+  }
 
   // Apply active theme on app mount
   React.useEffect(() => {
@@ -38,15 +91,34 @@ function App() {
     applyTheme(savedTheme)
   }, [])
 
-  const handleUpdateProfile = (profile) => {
-    setUserProfile(profile)
-    localStorage.setItem('userProfile', JSON.stringify(profile))
+  const handleUpdateProfile = async (profileData) => {
+    if (!session?.user?.id) return
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ name: profileData.name })
+        .eq('id', session.user.id)
+      
+      if (error) throw error
+      setUserProfile(prev => ({ ...prev, name: profileData.name }))
+      showToast('Perfil actualizado correctamente')
+    } catch (err) {
+      console.error(err)
+      showToast('Error al actualizar el perfil', true)
+    }
   }
   
   // Navigation & UI state
   const [seccionActual, setSeccionActual] = useState('panorama')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Redirección de seguridad: Operadores no pueden ver Torres
+  useEffect(() => {
+    if (userProfile && userProfile.rol !== 'Administrador' && seccionActual === 'torres') {
+      setSeccionActual('panorama')
+    }
+  }, [seccionActual, userProfile])
   
   // Selected items & Modals
   const [torreActualId, setTorreActualId] = useState(null)
@@ -67,10 +139,127 @@ function App() {
   // Global custom confirmation modal state
   const [confirmConfig, setConfirmConfig] = useState(null)
 
+  // ==================== TRAZABILIDAD Y SESIONES (Persistencia local ante F5 / suspensión) ====================
+  const [receptionSession, setReceptionSession] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sistema_flejes_reception_session')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
+
+  const [dispatchSession, setDispatchSession] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sistema_flejes_dispatch_session')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
+
+  // Sincronizar Recepción con LocalStorage y Supabase Storage (active_sessions)
+  useEffect(() => {
+    const syncReception = async () => {
+      if (receptionSession) {
+        localStorage.setItem('sistema_flejes_reception_session', JSON.stringify(receptionSession))
+        if (userProfile?.name) {
+          try {
+            await supabase.from('active_sessions').upsert({
+              tipo: 'reception',
+              operador: userProfile.name,
+              datos: receptionSession,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'tipo,operador' })
+          } catch (e) {
+            console.error('Error syncing reception to DB:', e)
+          }
+        }
+      } else {
+        localStorage.removeItem('sistema_flejes_reception_session')
+        if (userProfile?.name) {
+          try {
+            await supabase.from('active_sessions').delete().eq('tipo', 'reception').eq('operador', userProfile.name)
+          } catch (e) {
+            console.error('Error deleting reception from DB:', e)
+          }
+        }
+      }
+    }
+    syncReception()
+  }, [receptionSession, userProfile?.name])
+
+  // Sincronizar Despacho con LocalStorage y Supabase Storage (active_sessions)
+  useEffect(() => {
+    const syncDispatch = async () => {
+      if (dispatchSession) {
+        localStorage.setItem('sistema_flejes_dispatch_session', JSON.stringify(dispatchSession))
+        if (userProfile?.name) {
+          try {
+            await supabase.from('active_sessions').upsert({
+              tipo: 'dispatch',
+              operador: userProfile.name,
+              datos: dispatchSession,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'tipo,operador' })
+          } catch (e) {
+            console.error('Error syncing dispatch to DB:', e)
+          }
+        }
+      } else {
+        localStorage.removeItem('sistema_flejes_dispatch_session')
+        if (userProfile?.name) {
+          try {
+            await supabase.from('active_sessions').delete().eq('tipo', 'dispatch').eq('operador', userProfile.name)
+          } catch (e) {
+            console.error('Error deleting dispatch from DB:', e)
+          }
+        }
+      }
+    }
+    syncDispatch()
+  }, [dispatchSession, userProfile?.name])
+
+  // Restaurar borradores activos de la Base de Datos Supabase al iniciar (Soporte Multi-dispositivo)
+  useEffect(() => {
+    const restoreFromDB = async () => {
+      if (!userProfile?.name) return
+      try {
+        const { data, error } = await supabase
+          .from('active_sessions')
+          .select('*')
+          .eq('operador', userProfile.name)
+        if (error || !data) return
+        
+        data.forEach(session => {
+          if (session.tipo === 'reception' && !receptionSession) {
+            setReceptionSession(session.datos)
+          } else if (session.tipo === 'dispatch' && !dispatchSession) {
+            setDispatchSession(session.datos)
+          }
+        })
+      } catch (err) {
+        console.error('Error restoring sessions from DB:', err)
+      }
+    }
+    restoreFromDB()
+  }, [userProfile?.name])
+  
+  const [receptionInitOpen, setReceptionInitOpen] = useState(false)
+  const [dispatchInitOpen, setDispatchInitOpen] = useState(false)
+  
+  const [batchIngresoConfig, setBatchIngresoConfig] = useState(null) // { open, torreId, torreName, capMax, currentCount }
+  const [confirmSessionConfig, setConfirmSessionConfig] = useState(null) // { open, type }
+
   // Handle tab change and reset filter query
   const handleNavChange = (seccion) => {
+    if (receptionSession || dispatchSession) {
+      showToast('Debes terminar o cancelar la sesión activa primero', true)
+      return
+    }
     setSeccionActual(seccion)
     setSearchQuery('')
+    setTorreActualId(null) // Cerrar el detalle de la torre si está abierto al cambiar de sección
   }
 
   // ==================== QUERIES ====================
@@ -87,16 +276,13 @@ function App() {
       const { data, error } = await supabase
         .from('torres')
         .select('*, inventario(*)')
+        .order('orden', { ascending: true })
+        .order('secuencia', { referencedTable: 'inventario', ascending: true })
       if (error) {
         showToast('Error al cargar torres', true)
         throw error
       }
-      
-      // Sort torres by position alphanumerically (P01, P02...)
-      const sorted = (data || []).sort((a, b) => 
-        a.posicion.localeCompare(b.posicion, undefined, { numeric: true, sensitivity: 'base' })
-      )
-      return sorted
+      return data || []
     }
   })
 
@@ -110,7 +296,7 @@ function App() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('historial')
-        .select('*')
+        .select('*, recepciones(*), despachos(*)')
         .order('created_at', { ascending: false })
       if (error) {
         showToast('Error al cargar historial', true)
@@ -118,6 +304,27 @@ function App() {
       }
       return data || []
     }
+  })
+
+  // 3. Consulta de operaciones en curso (Monitoreo en Tiempo Real - Polling cada 5 segs)
+  const { 
+    data: activeSessions = [],
+    refetch: refetchActiveSessions 
+  } = useQuery({
+    queryKey: ['active_sessions'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('active_sessions')
+          .select('*')
+        if (error) throw error
+        return data || []
+      } catch (e) {
+        // Silencioso por si la tabla aún no se ha creado
+        return []
+      }
+    },
+    refetchInterval: 5000
   })
 
   // Process data in memory for fast layout binding
@@ -241,32 +448,250 @@ function App() {
     }
   }
 
-  // Add Strapping Band (Fleje) to a Tower
-  const handleAgregarFleje = async (torreId, peso) => {
-    const targetTorre = torres.find(t => t.id === torreId)
-    const flejes = inventarioMap[torreId] || []
+  // Iniciar Recepción
+  const handleStartReception = (data) => {
+    setReceptionSession({
+      ...data,
+      hora_inicio: new Date().toISOString(),
+      items: []
+    })
+    setSeccionActual('panorama')
+    showToast('Recepción Iniciada')
+  }
 
-    if (flejes.length >= targetTorre.cantidad_maxima) {
-      showToast('Capacidad límite alcanzada', true)
-      return false
+  // Iniciar Despacho
+  const handleStartDispatch = (data) => {
+    setDispatchSession({
+      ...data,
+      hora_inicio: new Date().toISOString(),
+      items: []
+    })
+    setSeccionActual('panorama')
+    showToast('Despacho Iniciado')
+  }
+
+  // Cancelar Operación Activa
+  const handleCancelActiveSession = (type) => {
+    const isRec = type === 'reception'
+    setConfirmConfig({
+      title: isRec ? 'Descartar Recepción' : 'Descartar Despacho',
+      message: `¿Estás seguro de que deseas cancelar y descartar todo el lote de ${isRec ? 'recepción de camión' : 'despacho de material'} en curso? Esta acción es irreversible y vaciará el borrador actual.`,
+      type: 'danger',
+      onConfirm: () => {
+        if (isRec) setReceptionSession(null)
+        else setDispatchSession(null)
+        showToast(isRec ? 'Recepción descartada' : 'Despacho descartado', true)
+      }
+    })
+  }
+
+  // Abrir Modal de Ingreso en Lote
+  const handleOpenBatchIngreso = (torreId, torreName, capMax, currentCount) => {
+    setBatchIngresoConfig({
+      open: true,
+      torreId,
+      torreName,
+      capMax,
+      currentCount
+    })
+  }
+
+  // Confirmar pesos desde BatchIngresoModal
+  const handleConfirmBatchIngreso = async (weightsList) => {
+    const { torreId, torreName } = batchIngresoConfig
+
+    // Si hay una recepción activa, los guardamos localmente en la sesión
+    if (receptionSession) {
+      const newItems = weightsList.map(peso => ({
+        torre_id: torreId,
+        peso
+      }))
+      setReceptionSession(prev => ({
+        ...prev,
+        items: [...prev.items, ...newItems]
+      }))
+      showToast(`${weightsList.length} flejes agregados al camión de recepción`)
+    } else {
+      // Ajuste manual directo (sin sesión activa - Crea Recepción de Respaldo)
+      try {
+        // 1. Crear Recepción
+        const { data: recData, error: eRec } = await supabase
+          .from('recepciones')
+          .insert([{
+            entregado_por: 'Ajuste Manual',
+            usuario_receptor: userProfile.name,
+            observaciones: 'Ingreso directo a torre',
+            fotos: [],
+            estado: 'COMPLETADO',
+            hora_inicio: new Date().toISOString(),
+            hora_fin: new Date().toISOString()
+          }])
+          .select()
+
+        if (eRec) throw eRec
+        const recepcionId = recData[0].id
+
+        // 2. Insertar en inventario vinculando recepcion_id
+        const { error: eInv } = await supabase
+          .from('inventario')
+          .insert(weightsList.map(peso => ({
+            torre_id: torreId,
+            peso,
+            recepcion_id: recepcionId
+          })))
+        if (eInv) throw eInv
+
+        // 3. Insertar en historial vinculando recepcion_id
+        const { error: eHist } = await supabase
+          .from('historial')
+          .insert(weightsList.map(peso => ({
+            torre_id: torreId,
+            posicion: torreName,
+            medida: torres.find(t => t.id === torreId)?.nombre_medida || '',
+            peso_fleje: peso,
+            motivo: 'Ajuste Ingreso',
+            despachador: userProfile.name,
+            hora_inicio: new Date().toISOString(),
+            recepcion_id: recepcionId
+          })))
+        if (eHist) throw eHist
+
+        showToast('Ajuste de inventario guardado')
+        queryClient.invalidateQueries({ queryKey: ['torres'] })
+        queryClient.invalidateQueries({ queryKey: ['historial'] })
+      } catch (e) {
+        console.error(e)
+        showToast('Error al guardar el ajuste de inventario', true)
+      }
     }
+    setBatchIngresoConfig(null)
+  }
+
+  // Alternar selección de fleje en Despacho
+  const handleToggleSelectFleje = (fleje) => {
+    if (!dispatchSession) return
+    setDispatchSession(prev => {
+      const exists = prev.items.some(item => item.id === fleje.id)
+      const newItems = exists
+        ? prev.items.filter(item => item.id !== fleje.id)
+        : [...prev.items, fleje]
+      return {
+        ...prev,
+        items: newItems
+      }
+    })
+  }
+
+  // Confirmar y Guardar Sesión de Recepción o Despacho
+  const handleConfirmSaveSession = async () => {
+    const isReception = !!receptionSession
+    const session = isReception ? receptionSession : dispatchSession
 
     try {
-      const { error } = await supabase
-        .from('inventario')
-        .insert([{ 
-          torre_id: torreId, 
-          peso 
-        }])
+      if (isReception) {
+        // 1. Crear Recepción
+        const { data: recData, error: eRec } = await supabase
+          .from('recepciones')
+          .insert([{
+            entregado_por: session.entregado_por,
+            usuario_receptor: userProfile.name,
+            observaciones: session.observaciones,
+            fotos: session.fotos,
+            estado: 'COMPLETADO',
+            hora_fin: new Date().toISOString()
+          }])
+          .select()
 
-      if (error) throw error
-      showToast('Fleje agregado')
+        if (eRec) throw eRec
+        const recepcionId = recData[0].id
+
+        // 2. Insertar en Inventario
+        const { error: eInv } = await supabase
+          .from('inventario')
+          .insert(session.items.map(item => ({
+            torre_id: item.torre_id,
+            peso: item.peso,
+            recepcion_id: recepcionId
+          })))
+        if (eInv) throw eInv
+
+        // 3. Insertar en Historial
+        const { error: eHist } = await supabase
+          .from('historial')
+          .insert(session.items.map(item => {
+            const t = torres.find(x => x.id === item.torre_id)
+            return {
+              torre_id: item.torre_id,
+              posicion: t ? t.posicion : 'Al Piso',
+              medida: t ? t.nombre_medida : 'Mixto',
+              peso_fleje: item.peso,
+              motivo: 'Ingreso',
+              despachador: userProfile.name,
+              hora_inicio: session.hora_inicio,
+              recepcion_id: recepcionId
+            }
+          }))
+        if (eHist) throw eHist
+
+        setReceptionSession(null)
+        showToast('Recepción de camión registrada con éxito')
+
+      } else {
+        // 1. Crear Despacho
+        const { data: despData, error: eDesp } = await supabase
+          .from('despachos')
+          .insert([{
+            destino: session.destino,
+            num_solicitud: session.num_solicitud,
+            motivo: session.motivo,
+            usuario_despachador: userProfile.name,
+            observaciones: session.observaciones,
+            fotos: session.fotos,
+            estado: 'ENTREGADO',
+            hora_fin: new Date().toISOString()
+          }])
+          .select()
+
+        if (eDesp) throw eDesp
+        const despachoId = despData[0].id
+
+        // 2. Eliminar del Inventario Activo
+        const idsToDelete = session.items.map(item => item.id)
+        const { error: eDel } = await supabase
+          .from('inventario')
+          .delete()
+          .in('id', idsToDelete)
+        if (eDel) throw eDel
+
+        // 3. Insertar en Historial
+        const { error: eHist } = await supabase
+          .from('historial')
+          .insert(session.items.map(item => {
+            const t = torres.find(x => x.id === item.torre_id)
+            return {
+              torre_id: item.torre_id,
+              posicion: t ? t.posicion : 'Sin Torre',
+              medida: t ? t.nombre_medida : '',
+              peso_fleje: item.peso,
+              motivo: session.motivo || 'Despacho',
+              despachador: userProfile.name,
+              num_solicitud: session.num_solicitud,
+              hora_inicio: session.hora_inicio,
+              recepcion_id: item.recepcion_id, // Auditoría: de qué recepción provino originalmente
+              despacho_id: despachoId
+            }
+          }))
+        if (eHist) throw eHist
+
+        setDispatchSession(null)
+        showToast('Despacho de material registrado con éxito')
+      }
+
       queryClient.invalidateQueries({ queryKey: ['torres'] })
-      return true
-    } catch (e) {
-      console.error(e)
-      showToast('Error al agregar el fleje', true)
-      return false
+      queryClient.invalidateQueries({ queryKey: ['historial'] })
+    } catch (err) {
+      console.error(err)
+      showToast('Error al registrar la operación', true)
     }
   }
 
@@ -332,7 +757,7 @@ function App() {
     }
   }
 
-  // Confirm Output / Consumption (Traslado)
+  // Confirm Output / Consumption (Traslado - Registra en tabla despachos y vincula a historial)
   const handleConfirmarTraslado = async (trasladoData) => {
     const targetTorre = torres.find(t => t.id === torreActualId)
     const currentInventory = inventarioMap[torreActualId] || []
@@ -344,7 +769,34 @@ function App() {
     }
 
     try {
-      // 1. Insert record into History logs
+      // 1. Crear Despacho
+      const { data: despData, error: eDesp } = await supabase
+        .from('despachos')
+        .insert([{
+          destino: trasladoData.destino,
+          num_solicitud: trasladoData.numSolicitud,
+          motivo: trasladoData.motivo,
+          usuario_despachador: trasladoData.despachador,
+          observaciones: 'Salida directa desde torre',
+          fotos: [],
+          estado: 'ENTREGADO',
+          hora_inicio: trasladoData.horaInicio,
+          hora_fin: new Date().toISOString()
+        }])
+        .select()
+
+      if (eDesp) throw eDesp
+      const despachoId = despData[0].id
+
+      // 2. Remove strap from active Inventory table
+      const { error: eInventario } = await supabase
+        .from('inventario')
+        .delete()
+        .eq('id', trasladoData.flejeId)
+
+      if (eInventario) throw eInventario
+
+      // 3. Insert record into History logs vinculando despacho_id
       const { error: eHistorial } = await supabase
         .from('historial')
         .insert([{
@@ -355,18 +807,11 @@ function App() {
           motivo: trasladoData.motivo,
           num_solicitud: trasladoData.numSolicitud,
           despachador: trasladoData.despachador,
-          hora_inicio: trasladoData.horaInicio
+          hora_inicio: trasladoData.horaInicio,
+          despacho_id: despachoId
         }])
 
       if (eHistorial) throw eHistorial
-
-      // 2. Remove strap from active Inventory table
-      const { error: eInventario } = await supabase
-        .from('inventario')
-        .delete()
-        .eq('id', trasladoData.flejeId)
-
-      if (eInventario) throw eInventario
 
       showToast(`${trasladoData.motivo} registrado con solicitud ${trasladoData.numSolicitud}`)
       
@@ -398,13 +843,47 @@ function App() {
     refetchHistorial()
   }
 
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      showToast('Sesión cerrada correctamente')
+    } catch (err) {
+      console.error(err)
+      showToast('Error al cerrar sesión', true)
+    }
+  }
+
   // Mobile Bottom Nav items list
   const bottomNavItems = [
     { id: 'panorama', label: 'Panorama', icon: LayoutDashboard },
-    { id: 'torres', label: 'Torres', icon: Layers },
+    userProfile?.rol === 'Administrador' && { id: 'torres', label: 'Torres', icon: Layers },
     { id: 'historial', label: 'Historial', icon: History },
     { id: 'config', label: 'Config', icon: Settings }
-  ]
+  ].filter(Boolean)
+
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen bg-bg flex flex-col items-center justify-center text-text-muted">
+        <Loader2 className="w-8 h-8 animate-spin text-accent mb-4" />
+        <span className="text-xs font-semibold uppercase tracking-wider animate-pulse">Cargando Sistema...</span>
+      </div>
+    )
+  }
+
+  if (!session || !userProfile) {
+    return (
+      <>
+        <LoginScreen showToast={showToast} />
+        {toast && (
+          <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-2xl text-xs font-bold shadow-lg border transition-all animate-fadeIn ${
+            toast.isError ? 'bg-danger/10 border-danger/20 text-danger animate-pulse' : 'bg-success/10 border-success/20 text-success'
+          }`}>
+            {toast.message}
+          </div>
+        )}
+      </>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-bg text-text flex">
@@ -416,6 +895,7 @@ function App() {
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
         userProfile={userProfile}
+        onLogout={handleLogout}
       />
 
       <div 
@@ -434,6 +914,7 @@ function App() {
           filtroFecha={filtroFecha}
           setFiltroFecha={setFiltroFecha}
           userProfile={userProfile}
+          onLogout={handleLogout}
         />
 
         {/* Dynamic Section Renderer with Skeleton support */}
@@ -445,6 +926,14 @@ function App() {
               searchQuery={searchQuery}
               isLoading={loadingTorres}
               onSelectTorre={setTorreActualId}
+              receptionSession={receptionSession}
+              dispatchSession={dispatchSession}
+              onStartReception={() => setReceptionInitOpen(true)}
+              onStartDispatch={() => setDispatchInitOpen(true)}
+              onOpenBatchIngreso={handleOpenBatchIngreso}
+              onToggleSelectFleje={handleToggleSelectFleje}
+              dispatchCart={dispatchSession?.items || []}
+              showToast={showToast}
             />
           )}
 
@@ -464,7 +953,8 @@ function App() {
           {seccionActual === 'historial' && (
             <HistorialView 
               historial={historial}
-              filtroFecha={filtroFecha}
+              activeSessions={activeSessions}
+              userProfile={userProfile}
               isLoading={loadingHistorial}
             />
           )}
@@ -473,6 +963,7 @@ function App() {
             <ConfigView 
               userProfile={userProfile}
               onUpdateProfile={handleUpdateProfile}
+              onLogout={handleLogout}
               showToast={showToast}
             />
           )}
@@ -508,8 +999,7 @@ function App() {
           torres={torres}
           inventario={inventarioMap}
           onClose={() => setTorreActualId(null)}
-          onEditTorre={handleOpenEditarTorre}
-          onAgregarFleje={handleAgregarFleje}
+          onOpenBatchIngreso={handleOpenBatchIngreso}
           onEliminarFleje={handleEliminarFleje}
           onEditarFleje={handleEditarFleje}
           onEliminarVariosFlejes={handleEliminarVariosFlejes}
@@ -523,6 +1013,7 @@ function App() {
           torreId={torreActualId}
           torres={torres}
           inventario={inventarioMap}
+          userProfile={userProfile}
           onClose={() => setTrasladoOpen(false)}
           onConfirm={handleConfirmarTraslado}
         />
@@ -592,6 +1083,80 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ==================== SESIONES ACTIVAS: BANNERS Y MODALES ==================== */}
+
+      {/* Banner de Sesión Activa Flotante (Recepción / Despacho) */}
+      {receptionSession && (
+        <SessionBanner
+          type="reception"
+          sessionData={receptionSession}
+          torres={torres}
+          onAddFloor={() => handleOpenBatchIngreso(null, 'Al Piso', 999, 0)}
+          onFinish={() => setConfirmSessionConfig({ open: true, type: 'reception' })}
+          onCancel={() => handleCancelActiveSession('reception')}
+          onRemoveItem={(index) => {
+            setReceptionSession(prev => ({
+              ...prev,
+              items: prev.items.filter((_, idx) => idx !== index)
+            }))
+          }}
+        />
+      )}
+
+      {dispatchSession && (
+        <SessionBanner
+          type="dispatch"
+          sessionData={dispatchSession}
+          torres={torres}
+          onFinish={() => setConfirmSessionConfig({ open: true, type: 'dispatch' })}
+          onCancel={() => handleCancelActiveSession('dispatch')}
+          onRemoveItem={handleToggleSelectFleje}
+        />
+      )}
+
+      {/* Modal de Inicialización de Sesiones */}
+      <SessionInitModal
+        isOpen={receptionInitOpen}
+        onClose={() => setReceptionInitOpen(false)}
+        type="reception"
+        onConfirm={handleStartReception}
+        showToast={showToast}
+      />
+
+      <SessionInitModal
+        isOpen={dispatchInitOpen}
+        onClose={() => setDispatchInitOpen(false)}
+        type="dispatch"
+        onConfirm={handleStartDispatch}
+        showToast={showToast}
+      />
+
+      {/* Modal de Ingreso en Lote (Táctil) */}
+      {batchIngresoConfig && (
+        <BatchIngresoModal
+          isOpen={batchIngresoConfig.open}
+          onClose={() => setBatchIngresoConfig(null)}
+          torreId={batchIngresoConfig.torreId}
+          torreName={batchIngresoConfig.torreName}
+          capMax={batchIngresoConfig.capMax}
+          currentCount={batchIngresoConfig.currentCount}
+          onConfirm={handleConfirmBatchIngreso}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Modal de Confirmación y Auditoría del Lote */}
+      {confirmSessionConfig && (
+        <ConfirmSessionModal
+          isOpen={confirmSessionConfig.open}
+          onClose={() => setConfirmSessionConfig(null)}
+          type={confirmSessionConfig.type}
+          sessionData={confirmSessionConfig.type === 'reception' ? receptionSession : dispatchSession}
+          torres={torres}
+          onConfirm={handleConfirmSaveSession}
+        />
       )}
 
     </div>

@@ -15,7 +15,8 @@ export default function Sidebar({
   setSeccionActual, 
   collapsed, 
   setCollapsed,
-  userProfile
+  userProfile,
+  onLogout
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false)
   const popoverRef = useRef(null)
@@ -36,9 +37,9 @@ export default function Sidebar({
       category: 'Almacén',
       items: [
         { id: 'panorama', label: 'Panorama', icon: LayoutDashboard },
-        { id: 'torres', label: 'Torres', icon: Layers },
+        userProfile?.rol === 'Administrador' && { id: 'torres', label: 'Torres', icon: Layers },
         { id: 'historial', label: 'Historial', icon: History }
-      ]
+      ].filter(Boolean)
     },
     {
       category: 'Sistema',
@@ -161,7 +162,7 @@ export default function Sidebar({
             
             <button
               onClick={() => {
-                alert('Cerrar sesión')
+                onLogout()
                 setPopoverOpen(false)
               }}
               className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors text-left cursor-pointer min-h-[36px]"
@@ -175,7 +176,7 @@ export default function Sidebar({
         {/* Botón de Logout cuando el Sidebar está expandido */}
         {!collapsed && (
           <button 
-            onClick={() => alert('Cerrar sesión')}
+            onClick={onLogout}
             className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-destructive hover:bg-destructive/10 cursor-pointer transition-colors border border-transparent hover:border-destructive/20"
           >
             <LogOut className="w-4 h-4" />

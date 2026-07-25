@@ -1,7 +1,26 @@
 import React, { useState } from 'react'
+import { Plus, Truck, Send, Check } from 'lucide-react'
 
-export default function PanoramaView({ torres, inventario, searchQuery, isLoading, onSelectTorre }) {
+export default function PanoramaView({ 
+  torres, 
+  inventario, 
+  searchQuery, 
+  isLoading, 
+  onSelectTorre,
+  // Flujos de trazabilidad
+  receptionSession,
+  dispatchSession,
+  onStartReception,
+  onStartDispatch,
+  onOpenBatchIngreso,
+  onToggleSelectFleje,
+  dispatchCart = [],
+  showToast
+}) {
   const [filtroEstado, setFiltroEstado] = useState('todas')
+
+  const receptionActive = !!receptionSession
+  const dispatchActive = !!dispatchSession
 
   // RENDER SKELETON LOADER
   if (isLoading) {
@@ -54,6 +73,8 @@ export default function PanoramaView({ torres, inventario, searchQuery, isLoadin
       )
     : torres
 
+  const selectedTorreIds = new Set(dispatchCart.map(item => item.torre_id).filter(Boolean))
+
   // 2. Calcular los contadores de cada chip basados en el filtro de búsqueda
   const counts = {
     todas: searchFiltered.length,
@@ -62,7 +83,8 @@ export default function PanoramaView({ torres, inventario, searchQuery, isLoadin
       const len = (inventario[t.id] || []).length
       return len > 0 && len < t.cantidad_maxima
     }).length,
-    vacias: searchFiltered.filter(t => (inventario[t.id] || []).length === 0).length
+    vacias: searchFiltered.filter(t => (inventario[t.id] || []).length === 0).length,
+    seleccionados: searchFiltered.filter(t => selectedTorreIds.has(t.id)).length
   }
 
   // 3. Filtrar según el estado seleccionado en los chips
@@ -71,6 +93,7 @@ export default function PanoramaView({ torres, inventario, searchQuery, isLoadin
     if (filtroEstado === 'llenas') return len >= t.cantidad_maxima
     if (filtroEstado === 'parciales') return len > 0 && len < t.cantidad_maxima
     if (filtroEstado === 'vacias') return len === 0
+    if (filtroEstado === 'seleccionados') return selectedTorreIds.has(t.id)
     return true
   })
 
@@ -138,13 +161,51 @@ export default function PanoramaView({ torres, inventario, searchQuery, isLoadin
         ))}
       </div>
 
-      {/* Filtros Rápidos en Formato de Chips (M3) */}
+      {/* Operaciones Rápidas de Almacén (Solo visibles si no hay sesión activa y no está cargando) */}
+      {!receptionActive && !dispatchActive && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-2 animate-fadeIn">
+          <button 
+            onClick={onStartReception}
+            className="bg-accent/5 border border-accent/25 hover:border-accent/40 hover:bg-accent/10 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all active:scale-98 shadow-xs text-left group min-h-[72px]"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-white shrink-0 group-hover:scale-105 transition-transform shadow-md">
+                <Truck className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-foreground">Recepción de Camión</h3>
+                <p className="text-[10px] text-text-muted mt-0.5">Ingresar lote de flejes (directo a torres o al piso)</p>
+              </div>
+            </div>
+            <Plus className="w-4 h-4 text-accent shrink-0 ml-2" />
+          </button>
+
+          <button 
+            onClick={onStartDispatch}
+            className="bg-warning/5 border border-warning/25 hover:border-warning/40 hover:bg-warning/10 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all active:scale-98 shadow-xs text-left group min-h-[72px]"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-warning flex items-center justify-center text-white shrink-0 group-hover:scale-105 transition-transform shadow-md">
+                <Send className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-foreground">Despacho de Material</h3>
+                <p className="text-[10px] text-text-muted mt-0.5">Retirar lote de flejes y registrar salida</p>
+              </div>
+            </div>
+            <Plus className="w-4 h-4 text-warning shrink-0 ml-2" />
+          </button>
+        </div>
+      )}
+
+      {/* Filtros Rápidos en Chips */}
       <div className="flex flex-wrap gap-2 pb-2">
         {[
           { id: 'todas', label: 'Todas', count: counts.todas },
           { id: 'llenas', label: 'Llenas', count: counts.llenas },
           { id: 'parciales', label: 'Parciales', count: counts.parciales },
-          { id: 'vacias', label: 'Vacías', count: counts.vacias }
+          { id: 'vacias', label: 'Vacías', count: counts.vacias },
+          ...(dispatchActive ? [{ id: 'seleccionados', label: 'Por Despachar', count: counts.seleccionados }] : [])
         ].map(chip => {
           const isSelected = filtroEstado === chip.id
           return (
@@ -182,29 +243,53 @@ export default function PanoramaView({ torres, inventario, searchQuery, isLoadin
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {torresData.map(({ torre, flejes, cantidadActual, capMax, pesoTorre, porcentaje, statusText, statusClass }) => {
             
+            const isEmpty = cantidadActual === 0
+            const isFull = cantidadActual >= capMax
+            const isDimmed = dispatchActive && isEmpty
+
             // Generar visualización de los pesos en la derecha (antiguo al tope, reciente a la base)
             const visualStack = []
             for (let i = 0; i < capMax; i++) {
               const itemIndex = capMax - i - 1
               const isOccupied = itemIndex < cantidadActual
-              const fleje = isOccupied ? flejes[cantidadActual - 1 - itemIndex] : null
+              const fleje = isOccupied ? flejes[itemIndex] : null
               
               if (isOccupied && fleje) {
+                const isSelected = dispatchActive && dispatchCart.some(item => item.id === fleje.id)
                 visualStack.push(
                   <div 
                     key={i} 
-                    className="bg-accent/10 border border-accent/30 rounded-xl px-3 py-1.5 flex items-center justify-between transition-all"
+                    onClick={(e) => {
+                      if (dispatchActive) {
+                        e.stopPropagation() // Evita clicks en el card
+                        onToggleSelectFleje(fleje)
+                      }
+                    }}
+                    className={`
+                      border rounded-xl px-3 py-1.5 flex items-center justify-between transition-all select-none min-h-[34px]
+                      ${dispatchActive ? 'cursor-pointer active:scale-95' : ''}
+                      ${isSelected 
+                        ? 'bg-warning text-white border-warning shadow-md scale-98 font-bold' 
+                        : dispatchActive
+                          ? 'bg-surface border-accent/40 text-accent hover:bg-accent/5'
+                          : 'bg-accent/10 border-accent/30 text-accent'
+                      }
+                    `}
                   >
-                    <span className="text-[9px] font-semibold text-text-muted font-mono">#{itemIndex + 1}</span>
-                    <span className="text-xs font-bold text-accent font-mono">{fleje.peso.toFixed(2)}</span>
-                    <span className="text-[9px] text-text-muted font-mono">kg</span>
+                    <span className={`text-[9px] font-semibold font-mono ${isSelected ? 'text-white/80' : 'text-text-muted'}`}>#{itemIndex + 1}</span>
+                    <span className="text-xs font-bold font-mono">{fleje.peso.toFixed(2)} kg</span>
+                    {isSelected ? (
+                      <Check className="w-3.5 h-3.5 text-white animate-scaleUp shrink-0" />
+                    ) : (
+                      <span className="text-[9px] text-text-muted font-mono">kg</span>
+                    )}
                   </div>
                 )
               } else {
                 visualStack.push(
                   <div 
                     key={i} 
-                    className="bg-bg/40 border border-border border-dashed rounded-xl px-3 py-1.5 flex items-center justify-between text-text-muted/30"
+                    className="bg-bg/40 border border-border border-dashed rounded-xl px-3 py-1.5 flex items-center justify-between text-text-muted/30 min-h-[34px]"
                   >
                     <span className="text-[9px] font-medium font-mono">#{itemIndex + 1}</span>
                     <span className="text-xs font-mono tracking-wider">---</span>
@@ -226,15 +311,25 @@ export default function PanoramaView({ torres, inventario, searchQuery, isLoadin
               const y = 160 - (idx * spacing)
               
               if (isOccupied) {
+                const fleje = flejes[idx]
+                const isSelected = dispatchActive && fleje && dispatchCart.some(item => item.id === fleje.id)
                 svgCoils.push(
                   <g key={idx} className="transition-all duration-300">
                     {/* Borde / Cara de grosor tridimensional */}
                     <path 
                       d={`M ${30 - rx},${y} A ${rx},${ry} 0 0,0 ${30 + rx},${y} L ${30 + rx},${y + thickness} A ${rx},${ry} 0 0,1 ${30 - rx},${y + thickness} Z`} 
-                      fill={`url(#metalSide-${torre.id})`} 
+                      fill={isSelected ? '#c2410c' : `url(#metalSide-${torre.id})`} 
                     />
                     {/* Cara superior del rollo */}
-                    <ellipse cx="30" cy={y} rx={rx} ry={ry} fill={`url(#metalTop-${torre.id})`} stroke="var(--color-accent)" strokeWidth="0.5" />
+                    <ellipse 
+                      cx="30" 
+                      cy={y} 
+                      rx={rx} 
+                      ry={ry} 
+                      fill={isSelected ? '#ea580c' : `url(#metalTop-${torre.id})`} 
+                      stroke={isSelected ? '#ffffff' : 'var(--color-accent)'} 
+                      strokeWidth="0.5" 
+                    />
                     {/* Agujero central */}
                     <ellipse cx="30" cy={y} rx={rx * 0.33} ry={ry * 0.33} fill="#1c1d22" stroke="var(--color-accent-border, var(--color-border))" strokeWidth="0.3" />
                   </g>
@@ -258,16 +353,52 @@ export default function PanoramaView({ torres, inventario, searchQuery, isLoadin
               }
             }
 
+            const handleCardClick = () => {
+              if (receptionActive) {
+                if (isFull) {
+                  showToast('Esta torre está llena', true)
+                  return
+                }
+                onOpenBatchIngreso(torre.id, torre.posicion, capMax, cantidadActual)
+              } else if (dispatchActive) {
+                // No abrir nada, se maneja mediante toques en las filas del peso
+              } else {
+                onSelectTorre(torre.id)
+              }
+            }
+
+            const selectedFromThisTorre = dispatchActive
+              ? dispatchCart.filter(item => item.torre_id === torre.id).length
+              : 0
+            const hasSelections = selectedFromThisTorre > 0
+            const isSelectedTorre = dispatchActive && hasSelections
+
             return (
               <div 
                 key={torre.id}
-                onClick={() => onSelectTorre(torre.id)}
-                className="bg-surface border border-border hover:border-accent/40 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between"
+                onClick={handleCardClick}
+                className={`
+                  bg-surface border rounded-2xl p-5 shadow-xs transition-all duration-200 flex flex-col justify-between
+                  ${isDimmed ? 'opacity-30 pointer-events-none border-border' : 'hover:shadow-md cursor-pointer'}
+                  ${receptionActive && isFull ? 'opacity-40 border-border pointer-events-none' : ''}
+                  ${receptionActive && !isFull ? 'border-accent/40 bg-accent/2 hover:border-accent' : ''}
+                  ${isSelectedTorre 
+                    ? 'border-warning bg-warning/2 ring-2 ring-warning/25 shadow-md shadow-warning/5 scale-102 z-10' 
+                    : !receptionActive ? 'border-border hover:border-accent/40' : ''
+                  }
+                `}
               >
                 <div className="flex flex-col flex-1">
                   {/* Fila superior de información */}
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xl font-bold text-foreground tracking-tight">{torre.posicion}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl font-bold text-foreground tracking-tight">{torre.posicion}</span>
+                      {dispatchActive && selectedFromThisTorre > 0 && (
+                        <span className="bg-warning text-white text-[9px] font-bold px-2 py-0.5 rounded-full animate-fadeIn font-mono shadow-xs">
+                          {selectedFromThisTorre} {selectedFromThisTorre === 1 ? 'seleccionado' : 'seleccionados'}
+                        </span>
+                      )}
+                    </div>
                     <span className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase ${statusClass}`}>
                       {statusText}
                     </span>
@@ -334,6 +465,20 @@ export default function PanoramaView({ torres, inventario, searchQuery, isLoadin
                     </div>
                   </div>
                 </div>
+
+                {/* Botón de ingreso rápido táctil (solo en recepción activa) */}
+                {receptionActive && !isFull && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpenBatchIngreso(torre.id, torre.posicion, capMax, cantidadActual)
+                    }}
+                    className="mt-3 w-full bg-accent hover:bg-accent-hover text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shadow-md shrink-0 min-h-[44px]"
+                  >
+                    <Plus className="w-4 h-4 text-white" />
+                    <span>Ingresar Flejes</span>
+                  </button>
+                )}
 
                 {/* Pie de tarjeta con sumatoria de pesos */}
                 <div className="flex justify-between items-center pt-3 border-t border-border mt-auto">

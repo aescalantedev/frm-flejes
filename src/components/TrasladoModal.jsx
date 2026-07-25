@@ -1,47 +1,35 @@
-import React, { useState, useEffect } from 'react'
-import { X, Calendar, User, FileText, ArrowRightLeft } from 'lucide-react'
+import React, { useState } from 'react'
+import { X, FileText, ArrowRightLeft, MapPin } from 'lucide-react'
 
 export default function TrasladoModal({ 
   torreId, 
   torres, 
   inventario, 
+  userProfile,
   onClose, 
   onConfirm 
 }) {
   const [flejeId, setFlejeId] = useState('')
   const [motivo, setMotivo] = useState('consumo')
   const [numSolicitud, setNumSolicitud] = useState('')
-  const [despachador, setDespachador] = useState('')
-  const [horaInicio, setHoraInicio] = useState('')
+  const [destino, setDestino] = useState('')
   const [procesando, setProcesando] = useState(false)
 
   const torre = torres.find(t => t.id === torreId)
   const flejes = inventario[torreId] || []
 
-  // Pre-fill local date and time in local format for datetime-local input
-  useEffect(() => {
-    const now = new Date()
-    const offset = now.getTimezoneOffset() * 60000
-    const localISOTime = new Date(now - offset).toISOString().slice(0, 16)
-    setHoraInicio(localISOTime)
-  }, [])
-
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!flejeId) {
-      alert('Selecciona un fleje')
+      alert('Por favor, selecciona un fleje')
       return
     }
     if (!numSolicitud.trim()) {
-      alert('Ingresa el número de solicitud')
+      alert('Por favor, ingresa el número de solicitud')
       return
     }
-    if (!despachador.trim()) {
-      alert('Ingresa el nombre del despachador')
-      return
-    }
-    if (!horaInicio) {
-      alert('Ingresa la fecha y hora de inicio')
+    if (!destino.trim()) {
+      alert('Por favor, ingresa el destino')
       return
     }
 
@@ -50,8 +38,9 @@ export default function TrasladoModal({
       flejeId,
       motivo: motivo === 'consumo' ? 'Consumo' : 'Devolución',
       numSolicitud: numSolicitud.trim(),
-      despachador: despachador.trim(),
-      horaInicio
+      despachador: userProfile?.name || 'Operador',
+      destino: destino.trim(),
+      horaInicio: new Date().toISOString()
     })
     setProcesando(false)
     if (success) {
@@ -90,7 +79,7 @@ export default function TrasladoModal({
                 value={flejeId}
                 onChange={(e) => setFlejeId(e.target.value)}
                 required
-                className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent transition-colors"
+                className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
                 <option value="">-- Seleccionar Fleje --</option>
                 {flejes.map((f, i) => (
@@ -107,7 +96,7 @@ export default function TrasladoModal({
               <select 
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
-                className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent transition-colors"
+                className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent transition-colors cursor-pointer"
               >
                 <option value="consumo">Consumo</option>
                 <option value="devolucion">Devolución</option>
@@ -130,34 +119,19 @@ export default function TrasladoModal({
               </div>
             </div>
 
-            {/* Despachador */}
+            {/* Destino */}
             <div>
-              <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5">Nombre - Despachador</label>
+              <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5">Destino / Área Destinataria</label>
               <div className="relative">
                 <input 
                   type="text" 
-                  placeholder="Ej: Juan Pérez López"
+                  placeholder="Ej: Planta A, Taller, Descarte..."
                   required
-                  value={despachador}
-                  onChange={(e) => setDespachador(e.target.value)}
+                  value={destino}
+                  onChange={(e) => setDestino(e.target.value)}
                   className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 pl-10 text-foreground text-sm focus:outline-none focus:border-accent transition-colors"
                 />
-                <User className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
-              </div>
-            </div>
-
-            {/* Fecha y Hora de Inicio */}
-            <div>
-              <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5">Fecha y Hora de Inicio</label>
-              <div className="relative">
-                <input 
-                  type="datetime-local" 
-                  required
-                  value={horaInicio}
-                  onChange={(e) => setHoraInicio(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 pl-10 text-foreground text-sm focus:outline-none focus:border-accent transition-colors font-mono"
-                />
-                <Calendar className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <MapPin className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
               </div>
             </div>
 

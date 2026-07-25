@@ -10,7 +10,8 @@ export default function AppBar({
   setSearchQuery,
   filtroFecha,
   setFiltroFecha,
-  userProfile
+  userProfile,
+  onLogout
 }) {
   const [searchFocused, setSearchFocused] = useState(false)
   const [mobileSearchActive, setMobileSearchActive] = useState(false)
@@ -151,28 +152,7 @@ export default function AppBar({
               </button>
             )}
 
-            {/* Calendario de Historial */}
-            {seccionActual === 'historial' && (
-              <div className="flex items-center gap-1.5">
-                <div className="relative">
-                  <input 
-                    type="date" 
-                    value={filtroFecha || ''}
-                    onChange={(e) => setFiltroFecha(e.target.value)}
-                    className="bg-surface border border-border rounded-xl px-2.5 py-1.5 pl-8 text-xs focus:outline-none focus:border-accent transition-colors font-mono"
-                  />
-                  <Calendar className="w-3.5 h-3.5 text-text-muted absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-                {filtroFecha && (
-                  <button 
-                    onClick={() => setFiltroFecha(null)}
-                    className="px-2 py-1 rounded-xl border border-border bg-surface-hover text-[9px] font-bold text-text-muted hover:text-foreground cursor-pointer transition-colors"
-                  >
-                    Limpiar
-                  </button>
-                )}
-              </div>
-            )}
+            {/* Calendario de Historial removido y co-localizado en HistorialView */}
 
             {/* Crear Torre */}
             {seccionActual === 'torres' && (
@@ -216,7 +196,7 @@ export default function AppBar({
                     
                     <button
                       onClick={() => {
-                        alert('Cerrar sesión')
+                        onLogout()
                         setUserMenuOpen(false)
                       }}
                       className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors text-left cursor-pointer min-h-[36px]"

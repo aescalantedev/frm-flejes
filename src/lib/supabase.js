@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = 'https://dputuuxqazhdrbxhiuqz.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwdXR1dXhxYXpoZHJieGhpdXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NzA3MjAsImV4cCI6MjEwMDE0NjcyMH0.3D_q24Fvtk6LeZxf8vGCVWNM6WVujgouyE1Lnso7xhM';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.warn('Advertencia: Faltan las variables de entorno de Supabase. Revisa tu archivo .env.local')
+}
+
+export const supabase = createClient(SUPABASE_URL || '', SUPABASE_KEY || '');

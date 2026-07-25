@@ -1,21 +1,17 @@
 import React, { useState } from 'react'
-import { X, Plus, Trash2, Edit3, ArrowRightLeft, Percent, Scale, Check, AlertTriangle } from 'lucide-react'
+import { X, Plus, Trash2, ArrowRightLeft, Percent, Scale, Check, AlertTriangle, Edit3 } from 'lucide-react'
 
 export default function DetailDrawer({ 
   torreId, 
   torres, 
   inventario, 
   onClose, 
-  onEditTorre, 
-  onAgregarFleje, 
+  onOpenBatchIngreso, 
   onEliminarFleje,
   onEditarFleje,
   onEliminarVariosFlejes,
   onAbrirTraslado 
 }) {
-  const [pesoInput, setPesoInput] = useState('')
-  const [agregando, setAgregando] = useState(false)
-  
   // Estado del menú de opciones de fleje activo (Bottom Sheet / Dialog)
   const [activeFlejeMenu, setActiveFlejeMenu] = useState(null) // { id, num, peso }
   
@@ -42,21 +38,6 @@ export default function DetailDrawer({
   const porcentaje = cantidadMaxima > 0 ? (cantidadActual / cantidadMaxima) * 100 : 0
   const pesoTotal = flejes.reduce((sum, f) => sum + f.peso, 0)
   const pesoPromedio = cantidadActual > 0 ? pesoTotal / cantidadActual : 0
-
-  const handleAddSubmit = async (e) => {
-    e.preventDefault()
-    const peso = parseFloat(pesoInput)
-    if (!peso || peso <= 0) {
-      alert('Ingresa un peso válido')
-      return
-    }
-    setAgregando(true)
-    const success = await onAgregarFleje(torreId, peso)
-    if (success) {
-      setPesoInput('')
-    }
-    setAgregando(false)
-  }
 
   // Toggles de selección múltiple
   const handleToggleSelectFleje = (id) => {
@@ -212,16 +193,17 @@ export default function DetailDrawer({
           {/* Botones principales de acción */}
           <div className="flex gap-2">
             <button 
-              onClick={() => onEditTorre(torre)}
-              className="flex-1 flex items-center justify-center gap-2 bg-surface hover:bg-surface-hover border border-border text-foreground px-4 py-3 rounded-xl text-xs font-semibold cursor-pointer transition-all duration-200"
+              onClick={() => onOpenBatchIngreso(torre.id, torre.posicion, cantidadMaxima, cantidadActual)}
+              disabled={lleno}
+              className="flex-1 flex items-center justify-center gap-2 bg-accent/15 hover:bg-accent/25 disabled:opacity-40 disabled:cursor-not-allowed border border-accent/30 text-accent px-4 py-3 rounded-xl text-xs font-bold cursor-pointer transition-all duration-200"
             >
-              <Edit3 className="w-4 h-4 text-text-muted" />
-              Editar Torre
+              <Plus className="w-4 h-4" />
+              Ingresar Flejes
             </button>
             <button 
               onClick={onAbrirTraslado}
               disabled={cantidadActual === 0}
-              className="flex-1 flex items-center justify-center gap-2 bg-warning/10 hover:bg-warning/20 disabled:opacity-40 disabled:cursor-not-allowed border border-warning/20 text-warning px-4 py-3 rounded-xl text-xs font-semibold cursor-pointer transition-all duration-200"
+              className="flex-1 flex items-center justify-center gap-2 bg-warning/10 hover:bg-warning/20 disabled:opacity-40 disabled:cursor-not-allowed border border-warning/20 text-warning px-4 py-3 rounded-xl text-xs font-bold cursor-pointer transition-all duration-200"
             >
               <ArrowRightLeft className="w-4 h-4" />
               Salida / Consumo
@@ -321,38 +303,8 @@ export default function DetailDrawer({
             )}
           </div>
 
-          {/* Formulario Agregar Nuevo Fleje */}
-          {!lleno ? (
-            <div className="bg-info/5 border border-info/20 rounded-2xl p-4 space-y-3">
-              <h4 className="text-xs font-bold text-info uppercase tracking-wider">Agregar Nuevo Fleje</h4>
-              <form onSubmit={handleAddSubmit} className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <label className="block text-[10px] text-text-muted mb-1 font-semibold uppercase">Peso (kg)</label>
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    min="0.01"
-                    required
-                    placeholder="0.00"
-                    value={pesoInput}
-                    onChange={(e) => setPesoInput(e.target.value)}
-                    className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-info transition-colors font-mono"
-                  />
-                </div>
-                <button 
-                  type="submit" 
-                  disabled={agregando}
-                  className="bg-info hover:bg-blue-600 text-white w-11 h-11 rounded-xl flex items-center justify-center cursor-pointer transition-colors"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </form>
-            </div>
-          ) : (
-            <div className="bg-accent/10 border border-accent/20 text-accent text-center py-3.5 rounded-xl text-xs font-semibold uppercase tracking-wider">
-              Límite de Capacidad Alcanzado
-            </div>
-          )}
+          {/* Espacio para estirar */}
+          <div className="h-2" />
 
           {/* Resumen General de Pesos de la Torre */}
           <div className="bg-bg border border-border rounded-2xl p-4 space-y-2">
