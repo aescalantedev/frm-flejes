@@ -8,7 +8,8 @@ import {
   Settings, 
   Loader2, 
   Info,
-  AlertTriangle
+  AlertTriangle,
+  Clock
 } from 'lucide-react'
 import { applyTheme } from './lib/theme'
 
@@ -882,6 +883,47 @@ function App() {
           </div>
         )}
       </>
+    )
+  }
+
+  if (userProfile && userProfile.aprobado === false) {
+    return (
+      <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-6 text-center transition-all duration-300">
+        <div className="w-16 h-16 bg-warning/10 border border-warning/20 text-warning rounded-2xl flex items-center justify-center mb-6 shadow-md animate-pulse">
+          <Clock className="w-8 h-8 text-warning" />
+        </div>
+        
+        <div className="max-w-md bg-surface border border-border rounded-2xl p-6 shadow-xl space-y-4 animate-scaleUp">
+          <h2 className="text-lg font-bold text-foreground">Cuenta en Proceso de Aprobación</h2>
+          <p className="text-xs text-text-muted leading-relaxed">
+            Hola <span className="font-bold text-foreground">{userProfile.name}</span>, tu cuenta se ha registrado correctamente bajo el correo <span className="font-semibold text-foreground font-mono">{userProfile.email}</span>.
+          </p>
+          <div className="bg-bg border border-border rounded-xl p-4 text-[11px] text-text-muted leading-relaxed text-left space-y-2">
+            <p className="font-bold text-foreground">⚠️ Siguiente Paso:</p>
+            <p>Por motivos de seguridad de planta, un administrador autorizado debe aprobar tu acceso y asignarte tu rol de trabajo antes de que puedas utilizar el sistema.</p>
+            <p className="text-[10px] text-accent/80 font-semibold">Por favor contacta al encargado de la planta para que active tu cuenta.</p>
+          </div>
+          
+          <div className="pt-2 flex gap-2">
+            <button
+              onClick={handleManualRefresh}
+              className="flex-1 bg-accent hover:bg-accent-hover text-white text-xs font-bold py-2.5 rounded-xl cursor-pointer shadow-xs transition-colors"
+            >
+              Comprobar Activación
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex-1 bg-surface hover:bg-surface-hover border border-border text-text-muted hover:text-foreground text-xs font-bold py-2.5 rounded-xl cursor-pointer transition-colors"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
+        </div>
+        
+        <div className="text-[10px] text-text-muted/60 font-semibold mt-8 tracking-wider">
+          SISTEMA DE FLEJES v2.0 • PLANTA CHILCA
+        </div>
+      </div>
     )
   }
 

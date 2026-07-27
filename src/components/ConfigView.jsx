@@ -52,6 +52,21 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
     }
   }
 
+  const handleToggleUserApproval = async (userId, currentStatus) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ aprobado: !currentStatus })
+        .eq('id', userId)
+      if (error) throw error
+      showToast(`Usuario ${!currentStatus ? 'aprobado' : 'desactivado'} con éxito`)
+      fetchProfiles()
+    } catch (err) {
+      console.error(err)
+      showToast('Error al actualizar estado del usuario', true)
+    }
+  }
+
   // Password state
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -526,6 +541,8 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
                         <th className="py-2.5 px-3">Nombre</th>
                         <th className="py-2.5 px-3">Correo Electrónico</th>
                         <th className="py-2.5 px-3">Rol de Acceso</th>
+                        <th className="py-2.5 px-3">Estado</th>
+                        <th className="py-2.5 px-3">Acción</th>
                         <th className="py-2.5 px-3 text-right">Fecha Registro</th>
                       </tr>
                     </thead>
@@ -549,6 +566,34 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
                                 <option value="Operador">Operador (Planta)</option>
                                 <option value="Administrador">Administrador</option>
                               </select>
+                            </td>
+                            <td className="py-3.5 px-3">
+                              {user.aprobado ? (
+                                <span className="text-[10px] bg-success/15 text-success border border-success/30 px-2 py-1 rounded-lg font-bold">
+                                  Activo / Aprobado
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-warning/15 text-warning border border-warning/30 px-2 py-1 rounded-lg font-bold animate-pulse">
+                                  Pendiente
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-3">
+                              {isSelf ? (
+                                <span className="text-[10px] text-text-muted italic">Inmutable</span>
+                              ) : (
+                                <button
+                                  onClick={() => handleToggleUserApproval(user.id, !!user.aprobado)}
+                                  className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer
+                                    ${user.aprobado 
+                                      ? 'bg-destructive/10 hover:bg-destructive/20 border-destructive/20 text-destructive' 
+                                      : 'bg-success/10 hover:bg-success/20 border-success/20 text-success'
+                                    }
+                                  `}
+                                >
+                                  {user.aprobado ? 'Desactivar' : 'Aprobar'}
+                                </button>
+                              )}
                             </td>
                             <td className="py-3.5 px-3 text-right text-text-muted font-mono">
                               {new Date(user.created_at).toLocaleDateString()}

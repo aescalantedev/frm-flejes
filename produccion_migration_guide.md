@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   name TEXT NOT NULL,
   email TEXT NOT NULL,
   rol TEXT NOT NULL DEFAULT 'Operador', -- 'Administrador' o 'Operador'
+  aprobado BOOLEAN NOT NULL DEFAULT false, -- Aprobación por parte de un administrador
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
