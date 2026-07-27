@@ -1,14 +1,20 @@
-import React, { useState, useEffect } from 'react'
-import { User, Lock, Sliders, Database, Info, Paintbrush, Bell, Shield, HelpCircle, Check, LogOut } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { User, Lock, Sliders, Database, Info, Paintbrush, Bell, Shield, HelpCircle, Check, LogOut, Eye, EyeOff } from 'lucide-react'
 import { themes, applyTheme } from '../lib/theme'
 import { supabase } from '../lib/supabase'
+import { useQueryClient } from '@tanstack/react-query'
 
 export default function ConfigView({ userProfile, onUpdateProfile, onLogout, showToast }) {
+  const queryClient = useQueryClient()
+  const fileInputRef = useRef(null)
   const [activeTab, setActiveTab] = useState('profile')
+  const [procesandoExport, setProcesandoExport] = useState(false)
+  const [procesandoImport, setProcesandoImport] = useState(false)
   
   // Profile state
   const [profileName, setProfileName] = useState(userProfile?.name || 'Administrador')
   const [profileEmail, setProfileEmail] = useState(userProfile?.email || 'admin@flejes.com')
+  const [procesandoProfile, setProcesandoProfile] = useState(false)
 
   // User Management state
   const [profilesList, setProfilesList] = useState([])
@@ -71,6 +77,10 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [procesandoPassword, setProcesandoPassword] = useState(false)
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   // Preferences state
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('theme') || 'darkMinimal')
@@ -85,17 +95,19 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
     }
   }, [userProfile])
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault()
     if (!profileName.trim() || !profileEmail.trim()) {
       showToast('Por favor, completa todos los campos del perfil', true)
       return
     }
-    onUpdateProfile({ name: profileName, email: profileEmail })
-    showToast('Perfil actualizado correctamente')
+    
+    setProcesandoProfile(true)
+    await onUpdateProfile({ name: profileName, email: profileEmail })
+    setProcesandoProfile(false)
   }
 
-  const handleChangePassword = (e) => {
+  const handleChangePassword = async (e) => {
     e.preventDefault()
     if (!currentPassword || !newPassword || !confirmPassword) {
       showToast('Por favor, completa todos los campos de contraseña', true)
@@ -110,11 +122,123 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
       return
     }
     
-    // Simulate API update
-    showToast('Contraseña actualizada exitosamente')
-    setCurrentPassword('')
-    setNewPassword('')
-    setConfirmPassword('')
+    setProcesandoPassword(true)
+    try {
+      // Supabase Auth actualiza la contraseña del usuario logueado en su sesión
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword.trim()
+      })
+      if (error) throw error
+
+      showToast('Contraseña actualizada exitosamente')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      console.error(err)
+      showToast(err.message || 'Error al actualizar la contraseña', true)
+    } finally {
+      setProcesandoPassword(false)
+    }
+  }
+
+  const handleExportBackup = async () => {
+    setProcesandoExport(true)
+    try {
+      const { data: dbTorres, error: errorTorres } = await supabase
+        .from('torres')
+        .select('*')
+      if (errorTorres) throw errorTorres
+
+      const { data: dbInventario, error: errorInv } = await supabase
+        .from('inventario')
+        .select('*')
+      if (errorInv) throw errorInv
+
+      const backupData = {
+        system: 'Sistema de Flejes v2.0',
+        exportedAt: new Date().toISOString(),
+        torres: dbTorres || [],
+        inventario: dbInventario || []
+      }
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2))
+      const downloadAnchor = document.createElement('a')
+      downloadAnchor.setAttribute("href", dataStr)
+      downloadAnchor.setAttribute("download", `backup_inventario_flejes_${new Date().toISOString().split('T')[0]}.json`)
+      document.body.appendChild(downloadAnchor)
+      downloadAnchor.click()
+      downloadAnchor.remove()
+      
+      showToast('Copia de seguridad del inventario exportada con éxito')
+    } catch (err) {
+      console.error(err)
+      showToast(err.message || 'Error al exportar la copia de seguridad', true)
+    } finally {
+      setProcesandoExport(false)
+    }
+  }
+
+  const handleImportBackup = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const json = JSON.parse(event.target.result)
+        
+        if (json.system !== 'Sistema de Flejes v2.0' || !Array.isArray(json.inventario)) {
+          throw new Error('El archivo seleccionado no es un respaldo válido de este sistema.')
+        }
+
+        const confirmRestore = window.confirm(
+          `⚠️ ADVERTENCIA DE RESTAURACIÓN:\n\n` +
+          `Este archivo contiene ${json.inventario.length} flejes del ${new Date(json.exportedAt).toLocaleString()}.\n` +
+          `Al restaurar, se ELIMINARÁ por completo el inventario actual de todas las torres y se reemplazará por el del archivo.\n\n` +
+          `¿Estás seguro de que deseas proceder con la restauración de datos?`
+        )
+
+        if (!confirmRestore) return
+
+        setProcesandoImport(true)
+
+        // a) Delete all current active inventory
+        const { error: deleteError } = await supabase
+          .from('inventario')
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000')
+        
+        if (deleteError) throw deleteError
+
+        // b) Insert backed-up inventory
+        if (json.inventario.length > 0) {
+          const cleanItems = json.inventario.map(item => ({
+            id: item.id,
+            torre_id: item.torre_id,
+            peso: item.peso,
+            secuencia: item.secuencia,
+            recepcion_id: item.recepcion_id
+          }))
+
+          const { error: insertError } = await supabase
+            .from('inventario')
+            .insert(cleanItems)
+
+          if (insertError) throw insertError
+        }
+
+        showToast('Restauración de inventario completada con éxito')
+        queryClient.invalidateQueries({ queryKey: ['torres'] })
+      } catch (err) {
+        console.error(err)
+        showToast(err.message || 'Error al procesar el archivo de respaldo', true)
+      } finally {
+        setProcesandoImport(false)
+        e.target.value = ''
+      }
+    }
+    reader.readAsText(file)
   }
 
   const handleSelectTheme = (themeKey) => {
@@ -148,7 +272,7 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6 min-w-0">
+    <div className="w-full max-w-7xl mx-auto space-y-6 min-w-0">
       
       {/* Title */}
       <div className="flex items-center gap-3 border-b border-border/60 pb-4">
@@ -282,9 +406,10 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
                   </button>
                   <button 
                     type="submit"
-                    className="bg-accent hover:bg-accent-hover text-white text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer shadow-xs transition-colors ml-auto"
+                    disabled={procesandoProfile}
+                    className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer shadow-xs transition-colors ml-auto"
                   >
-                    Guardar Cambios
+                    {procesandoProfile ? 'Guardando...' : 'Guardar Cambios'}
                   </button>
                 </div>
               </form>
@@ -299,47 +424,75 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
                 <p className="text-[11px] text-text-muted">Modifica tu contraseña de acceso para resguardar tu cuenta.</p>
               </div>
 
-              <form onSubmit={handleChangePassword} className="space-y-4">
+               <form onSubmit={handleChangePassword} className="space-y-4">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Contraseña Actual</label>
-                  <input 
-                    type="password" 
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl px-4 py-2.5 text-xs outline-none text-foreground transition-colors font-mono"
-                    placeholder="••••••••"
-                  />
+                  <div className="relative">
+                    <input 
+                      type={showCurrentPassword ? 'text' : 'password'} 
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl pl-4 pr-10 py-2.5 text-xs outline-none text-foreground transition-colors font-mono"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-foreground absolute right-1.5 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg hover:bg-bg/50 transition-colors"
+                    >
+                      {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Nueva Contraseña</label>
-                    <input 
-                      type="password" 
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl px-4 py-2.5 text-xs outline-none text-foreground transition-colors font-mono"
-                      placeholder="Mínimo 6 caracteres"
-                    />
+                    <div className="relative">
+                      <input 
+                        type={showNewPassword ? 'text' : 'password'} 
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl pl-4 pr-10 py-2.5 text-xs outline-none text-foreground transition-colors font-mono"
+                        placeholder="Mínimo 6 caracteres"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-foreground absolute right-1.5 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg hover:bg-bg/50 transition-colors"
+                      >
+                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Confirmar Nueva Contraseña</label>
-                    <input 
-                      type="password" 
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl px-4 py-2.5 text-xs outline-none text-foreground transition-colors font-mono"
-                      placeholder="Repite la contraseña"
-                    />
+                    <div className="relative">
+                      <input 
+                        type={showConfirmPassword ? 'text' : 'password'} 
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full bg-bg border border-border focus:border-accent/80 rounded-xl pl-4 pr-10 py-2.5 text-xs outline-none text-foreground transition-colors font-mono"
+                        placeholder="Repite la contraseña"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-foreground absolute right-1.5 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg hover:bg-bg/50 transition-colors"
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 <div className="pt-4 border-t border-border/60 flex justify-end">
                   <button 
                     type="submit"
-                    className="bg-accent hover:bg-accent-hover text-white text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer shadow-xs transition-colors"
+                    disabled={procesandoPassword}
+                    className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer shadow-xs transition-colors"
                   >
-                    Actualizar Contraseña
+                    {procesandoPassword ? 'Actualizando...' : 'Actualizar Contraseña'}
                   </button>
                 </div>
               </form>
@@ -476,20 +629,11 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
                   <p className="text-[10px] text-text-muted">Descarga un archivo local conteniendo las torres y los flejes actuales.</p>
                 </div>
                 <button
-                  onClick={() => {
-                    // Create simulated download
-                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ date: new Date().toISOString(), system: 'Sistema de Flejes v2.0' }))
-                    const downloadAnchor = document.createElement('a')
-                    downloadAnchor.setAttribute("href", dataStr)
-                    downloadAnchor.setAttribute("download", `backup_flejes_${new Date().toISOString().split('T')[0]}.json`)
-                    document.body.appendChild(downloadAnchor)
-                    downloadAnchor.click()
-                    downloadAnchor.remove()
-                    showToast('Copia de seguridad descargada exitosamente')
-                  }}
-                  className="bg-accent/10 hover:bg-accent/20 border border-accent/30 text-accent text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer w-full sm:w-auto text-center"
+                  onClick={handleExportBackup}
+                  disabled={procesandoExport}
+                  className="bg-accent/10 hover:bg-accent/20 border border-accent/30 text-accent text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer w-full sm:w-auto text-center disabled:opacity-50"
                 >
-                  Exportar JSON
+                  {procesandoExport ? 'Exportando...' : 'Exportar JSON'}
                 </button>
               </div>
 
@@ -498,11 +642,19 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
                   <p className="text-xs font-semibold text-foreground">Importar Registros Externos</p>
                   <p className="text-[10px] text-text-muted">Carga un archivo de respaldo previamente exportado.</p>
                 </div>
+                <input 
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImportBackup}
+                  accept=".json"
+                  className="hidden"
+                />
                 <button
-                  onClick={() => alert('Selecciona el archivo JSON de respaldo para continuar')}
-                  className="bg-surface-hover hover:bg-border/60 border border-border text-text-muted hover:text-foreground text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer w-full sm:w-auto text-center"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={procesandoImport}
+                  className="bg-surface-hover hover:bg-border/60 border border-border text-text-muted hover:text-foreground text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer w-full sm:w-auto text-center disabled:opacity-50"
                 >
-                  Cargar Archivo
+                  {procesandoImport ? 'Restaurando...' : 'Cargar Archivo'}
                 </button>
               </div>
             </div>
@@ -569,11 +721,11 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
                             </td>
                             <td className="py-3.5 px-3">
                               {user.aprobado ? (
-                                <span className="text-[10px] bg-success/15 text-success border border-success/30 px-2 py-1 rounded-lg font-bold">
-                                  Activo / Aprobado
+                                <span className="text-[10px] bg-success/15 text-success border border-success/30 px-2.5 py-1 rounded-lg font-bold">
+                                  Activo
                                 </span>
                               ) : (
-                                <span className="text-[10px] bg-warning/15 text-warning border border-warning/30 px-2 py-1 rounded-lg font-bold animate-pulse">
+                                <span className="text-[10px] bg-warning/15 text-warning border border-warning/30 px-2.5 py-1 rounded-lg font-bold animate-pulse">
                                   Pendiente
                                 </span>
                               )}

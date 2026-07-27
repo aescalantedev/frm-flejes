@@ -95,17 +95,39 @@ function App() {
   const handleUpdateProfile = async (profileData) => {
     if (!session?.user?.id) return
     try {
-      const { error } = await supabase
+      const emailChanged = profileData.email.trim().toLowerCase() !== userProfile.email.toLowerCase()
+      
+      // 1. Actualizar tabla profiles
+      const { error: dbError } = await supabase
         .from('profiles')
-        .update({ name: profileData.name })
+        .update({ 
+          name: profileData.name.trim(),
+          email: profileData.email.trim()
+        })
         .eq('id', session.user.id)
       
-      if (error) throw error
-      setUserProfile(prev => ({ ...prev, name: profileData.name }))
-      showToast('Perfil actualizado correctamente')
+      if (dbError) throw dbError
+      
+      // 2. Si cambió el correo, actualizar en Supabase Auth
+      if (emailChanged) {
+        const { error: authError } = await supabase.auth.updateUser({
+          email: profileData.email.trim()
+        })
+        if (authError) throw authError
+        showToast('Perfil guardado. Revisa tu bandeja de entrada para verificar tu nuevo correo.')
+      } else {
+        showToast('Perfil actualizado correctamente')
+      }
+      
+      // Actualizar estado local
+      setUserProfile(prev => ({ 
+        ...prev, 
+        name: profileData.name.trim(),
+        email: profileData.email.trim()
+      }))
     } catch (err) {
       console.error(err)
-      showToast('Error al actualizar el perfil', true)
+      showToast(err.message || 'Error al actualizar el perfil', true)
     }
   }
   
