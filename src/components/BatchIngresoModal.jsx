@@ -6,6 +6,7 @@ export default function BatchIngresoModal({
   onClose,
   torreId,
   torreName, // e.g. "P34" o "Al Piso"
+  torreMedida = '', // e.g. "100 x 1.6"
   capMax = 12,
   currentCount = 0,
   onConfirm,
@@ -13,6 +14,7 @@ export default function BatchIngresoModal({
 }) {
   const [pesosList, setPesosList] = useState([])
   const [currentPeso, setCurrentPeso] = useState('')
+  const [currentMedida, setCurrentMedida] = useState('')
   const inputRef = useRef(null)
 
   const isFloor = !torreId || torreName === 'Al Piso'
@@ -20,20 +22,22 @@ export default function BatchIngresoModal({
   const currentBatchCount = pesosList.length
   const spacesLeft = isFloor ? 999 : spacesAvailable - currentBatchCount
 
-  // Enfocar el input numérico al abrir
+  // Enfocar el input numérico al abrir y setear medida nominal de la torre
   useEffect(() => {
     if (isOpen) {
       setPesosList([])
       setCurrentPeso('')
+      setCurrentMedida(torreMedida || '')
       setTimeout(() => inputRef.current?.focus(), 150)
     }
-  }, [isOpen])
+  }, [isOpen, torreMedida])
 
   if (!isOpen) return null
 
   const handleAddPeso = (e) => {
     if (e) e.preventDefault()
     const val = parseFloat(currentPeso)
+    const medVal = currentMedida.trim()
     
     if (isNaN(val) || val <= 0) {
       showToast('Por favor ingresa un peso válido', true)
@@ -45,7 +49,7 @@ export default function BatchIngresoModal({
       return
     }
 
-    setPesosList(prev => [...prev, val])
+    setPesosList(prev => [...prev, { peso: val, medida: medVal }])
     setCurrentPeso('')
     // Volver a enfocar para inserción rápida
     inputRef.current?.focus()
@@ -64,7 +68,7 @@ export default function BatchIngresoModal({
     onClose()
   }
 
-  const totalPesoBatch = pesosList.reduce((sum, w) => sum + w, 0)
+  const totalPesoBatch = pesosList.reduce((sum, item) => sum + item.peso, 0)
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
@@ -93,29 +97,41 @@ export default function BatchIngresoModal({
         {/* Contenido */}
         <div className="p-5 flex-1 overflow-y-auto flex flex-col min-h-0">
           
-          {/* Formulario de Input */}
-          <form onSubmit={handleAddPeso} className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                ref={inputRef}
-                type="number"
-                inputMode="decimal"
-                pattern="[0-9]*"
-                placeholder="Ej. 750.50"
-                value={currentPeso}
-                onChange={(e) => setCurrentPeso(e.target.value)}
-                className="w-full bg-bg border border-border text-foreground placeholder:text-text-muted/40 rounded-xl py-3 px-4 text-sm font-semibold outline-none focus:border-accent font-mono"
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-text-muted font-mono">kg</span>
+          {/* Formulario de Input de Peso y Medida */}
+          <form onSubmit={handleAddPeso} className="flex flex-col gap-2.5">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  ref={inputRef}
+                  type="number"
+                  inputMode="decimal"
+                  pattern="[0-9]*"
+                  placeholder="Peso (Kg). Ej. 750.50"
+                  value={currentPeso}
+                  onChange={(e) => setCurrentPeso(e.target.value)}
+                  className="w-full bg-bg border border-border text-foreground placeholder:text-text-muted/40 rounded-xl py-3 px-4 text-xs font-semibold outline-none focus:border-accent font-mono"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-text-muted font-mono">kg</span>
+              </div>
+              
+              <div className="w-2/5">
+                <input
+                  type="text"
+                  placeholder="Medida. Ej. 100x1.6"
+                  value={currentMedida}
+                  onChange={(e) => setCurrentMedida(e.target.value)}
+                  className="w-full bg-bg border border-border text-foreground placeholder:text-text-muted/40 rounded-xl py-3 px-3 text-xs font-semibold outline-none focus:border-accent font-mono"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="bg-accent hover:bg-accent-hover text-white px-4 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shrink-0"
+                title="Agregar fleje"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
             </div>
-            
-            <button
-              type="submit"
-              className="bg-accent hover:bg-accent-hover text-white px-4 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shrink-0"
-              title="Agregar peso"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
           </form>
 
           {/* Estado de capacidad / guía */}
@@ -128,23 +144,29 @@ export default function BatchIngresoModal({
             </div>
           )}
 
-          {/* Listado de pesos acumulados (diseño móvil grande) */}
+          {/* Listado de pesos acumulados */}
           <div className="mt-4 flex-1 overflow-y-auto border border-border rounded-xl bg-bg/30 p-2 min-h-[140px] max-h-[220px]">
             {pesosList.length === 0 ? (
               <div className="h-full flex items-center justify-center text-xs text-text-muted/40 italic">
-                Ningún peso en lista
+                Ningún fleje en lista
               </div>
             ) : (
               <div className="space-y-1.5">
-                {pesosList.map((peso, idx) => (
+                {pesosList.map((item, idx) => (
                   <div 
                     key={idx} 
-                    className="flex items-center justify-between bg-surface border border-border/60 rounded-lg px-3 py-2 animate-fadeIn"
+                    className="flex items-center justify-between bg-surface border border-border/60 rounded-lg px-3 py-1.5 animate-fadeIn"
                   >
-                    <span className="text-[10px] font-bold text-text-muted font-mono">#{idx + 1}</span>
-                    <span className="text-xs font-bold text-foreground font-mono">{peso.toFixed(2)} kg</span>
+                    <div className="flex flex-col items-start">
+                      <span className="text-[9px] font-bold text-text-muted font-mono">#{idx + 1}</span>
+                      {item.medida && (
+                        <span className="text-[9px] font-bold text-accent font-mono uppercase bg-accent/5 border border-accent/20 px-1 py-0.5 rounded mt-0.5">
+                          {item.medida}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs font-bold text-foreground font-mono">{item.peso.toFixed(2)} kg</span>
                     
-                    {/* Botón de borrar grande para tacto móvil */}
                     <button
                       type="button"
                       onClick={() => handleRemovePeso(idx)}

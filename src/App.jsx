@@ -9,7 +9,8 @@ import {
   Loader2, 
   Info,
   AlertTriangle,
-  Clock
+  Clock,
+  Truck
 } from 'lucide-react'
 import { applyTheme } from './lib/theme'
 
@@ -20,6 +21,8 @@ import PanoramaView from './components/PanoramaView'
 import TorresView from './components/TorresView'
 import HistorialView from './components/HistorialView'
 import ConfigView from './components/ConfigView'
+import TransportView from './components/TransportView'
+import UsersView from './components/UsersView'
 import LoginScreen from './components/LoginScreen'
 import DetailDrawer from './components/DetailDrawer'
 import TrasladoModal from './components/TrasladoModal'
@@ -510,12 +513,14 @@ function App() {
 
   // Abrir Modal de Ingreso en Lote
   const handleOpenBatchIngreso = (torreId, torreName, capMax, currentCount) => {
+    const t = torres.find(x => x.id === torreId)
     setBatchIngresoConfig({
       open: true,
       torreId,
       torreName,
       capMax,
-      currentCount
+      currentCount,
+      torreMedida: t ? t.nombre_medida : ''
     })
   }
 
@@ -525,9 +530,10 @@ function App() {
 
     // Si hay una recepción activa, los guardamos localmente en la sesión
     if (receptionSession) {
-      const newItems = weightsList.map(peso => ({
+      const newItems = weightsList.map(item => ({
         torre_id: torreId,
-        peso
+        peso: item.peso,
+        medida: item.medida
       }))
       setReceptionSession(prev => ({
         ...prev,
@@ -557,9 +563,10 @@ function App() {
         // 2. Insertar en inventario vinculando recepcion_id
         const { error: eInv } = await supabase
           .from('inventario')
-          .insert(weightsList.map(peso => ({
+          .insert(weightsList.map(item => ({
             torre_id: torreId,
-            peso,
+            peso: item.peso,
+            medida: item.medida,
             recepcion_id: recepcionId
           })))
         if (eInv) throw eInv
@@ -567,11 +574,11 @@ function App() {
         // 3. Insertar en historial vinculando recepcion_id
         const { error: eHist } = await supabase
           .from('historial')
-          .insert(weightsList.map(peso => ({
+          .insert(weightsList.map(item => ({
             torre_id: torreId,
             posicion: torreName,
-            medida: torres.find(t => t.id === torreId)?.nombre_medida || '',
-            peso_fleje: peso,
+            medida: item.medida || torres.find(t => t.id === torreId)?.nombre_medida || '',
+            peso_fleje: item.peso,
             motivo: 'Ajuste Ingreso',
             despachador: userProfile.name,
             hora_inicio: new Date().toISOString(),
@@ -621,7 +628,11 @@ function App() {
             observaciones: session.observaciones,
             fotos: session.fotos,
             estado: 'COMPLETADO',
-            hora_fin: new Date().toISOString()
+            hora_fin: new Date().toISOString(),
+            empresa_transporte: session.empresa_transporte || null,
+            placa_remolque: session.placa_remolque || null,
+            placa_semiremolque: session.placa_semiremolque || null,
+            conductor_dni: session.conductor_dni || null
           }])
           .select()
 
@@ -634,6 +645,7 @@ function App() {
           .insert(session.items.map(item => ({
             torre_id: item.torre_id,
             peso: item.peso,
+            medida: item.medida || null,
             recepcion_id: recepcionId
           })))
         if (eInv) throw eInv
@@ -646,7 +658,7 @@ function App() {
             return {
               torre_id: item.torre_id,
               posicion: t ? t.posicion : 'Al Piso',
-              medida: t ? t.nombre_medida : 'Mixto',
+              medida: item.medida || (t ? t.nombre_medida : 'Mixto'),
               peso_fleje: item.peso,
               motivo: 'Ingreso',
               despachador: userProfile.name,
@@ -881,7 +893,7 @@ function App() {
     { id: 'panorama', label: 'Panorama', icon: LayoutDashboard },
     userProfile?.rol === 'Administrador' && { id: 'torres', label: 'Torres', icon: Layers },
     { id: 'historial', label: 'Historial', icon: History },
-    { id: 'config', label: 'Config', icon: Settings }
+    { id: 'transport', label: 'Transporte', icon: Truck }
   ].filter(Boolean)
 
   if (loadingAuth) {
@@ -1028,6 +1040,20 @@ function App() {
               userProfile={userProfile}
               onUpdateProfile={handleUpdateProfile}
               onLogout={handleLogout}
+              showToast={showToast}
+            />
+          )}
+
+          {seccionActual === 'transport' && (
+            <TransportView 
+              userProfile={userProfile}
+              showToast={showToast}
+            />
+          )}
+
+          {seccionActual === 'users' && (
+            <UsersView 
+              userProfile={userProfile}
               showToast={showToast}
             />
           )}

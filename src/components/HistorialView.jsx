@@ -304,26 +304,8 @@ const groupHistory = (items) => {
   const groups = {}
   
   items.forEach(m => {
-    if (m.recepcion_id) {
-      const key = `rec_${m.recepcion_id}`
-      if (!groups[key]) {
-        groups[key] = {
-          id: m.recepcion_id,
-          type: 'reception',
-          title: 'Recepción de Camión',
-          entregado_por: m.recepciones?.entregado_por || 'Transportista',
-          despachador: m.despachador,
-          num_solicitud: m.num_solicitud || m.recepciones?.num_solicitud,
-          hora_inicio: m.recepciones?.hora_inicio || m.created_at,
-          hora_fin: m.recepciones?.hora_fin || m.created_at,
-          created_at: m.created_at,
-          observaciones: m.recepciones?.observaciones || '',
-          fotos: m.recepciones?.fotos || [],
-          items: []
-        }
-      }
-      groups[key].items.push(m)
-    } else if (m.despacho_id) {
+    // IMPORTANTE: Primero comprobar despacho_id, porque un despacho mantiene el recepcion_id para la trazabilidad
+    if (m.despacho_id) {
       const key = `desp_${m.despacho_id}`
       if (!groups[key]) {
         groups[key] = {
@@ -343,13 +325,50 @@ const groupHistory = (items) => {
         }
       }
       groups[key].items.push(m)
+    } else if (m.recepcion_id) {
+      const key = `rec_${m.recepcion_id}`
+      if (!groups[key]) {
+        groups[key] = {
+          id: m.recepcion_id,
+          type: 'reception',
+          title: 'Recepción de Camión',
+          entregado_por: m.recepciones?.entregado_por || 'Transportista',
+          despachador: m.despachador,
+          num_solicitud: m.num_solicitud || m.recepciones?.num_solicitud,
+          hora_inicio: m.recepciones?.hora_inicio || m.created_at,
+          hora_fin: m.recepciones?.hora_fin || m.created_at,
+          created_at: m.created_at,
+          observaciones: m.recepciones?.observaciones || '',
+          fotos: m.recepciones?.fotos || [],
+          empresa_transporte: m.recepciones?.empresa_transporte || '',
+          placa_remolque: m.recepciones?.placa_remolque || '',
+          placa_semiremolque: m.recepciones?.placa_semiremolque || '',
+          conductor_dni: m.recepciones?.conductor_dni || '',
+          items: []
+        }
+      }
+      groups[key].items.push(m)
     } else {
       const key = `adj_${m.id}`
-      const isTransfer = m.motivo?.toLowerCase().includes('traslado')
+      const motivoLower = m.motivo?.toLowerCase() || ''
+      const isTransfer = motivoLower.includes('traslado')
+      const isSalida = motivoLower.includes('salida') || motivoLower.includes('consumo') || motivoLower.includes('devolución')
+      
+      let type = 'adjustment'
+      let title = m.motivo || 'Ajuste Manual'
+      
+      if (isTransfer) {
+        type = 'transfer'
+        title = 'Traslado Interno'
+      } else if (isSalida) {
+        type = 'dispatch'
+        title = m.motivo || 'Despacho / Consumo'
+      }
+
       groups[key] = {
         id: m.id,
-        type: isTransfer ? 'transfer' : 'adjustment',
-        title: isTransfer ? 'Traslado Interno' : m.motivo || 'Ajuste Manual',
+        type,
+        title,
         despachador: m.despachador,
         num_solicitud: m.num_solicitud,
         destino: m.destino || null,
@@ -802,10 +821,30 @@ export default function HistorialView({ historial = [], activeSessions = [], use
 
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 text-xs border-t border-border/40 pt-3.5">
                   {activeTx.type === 'reception' && (
-                    <div className="col-span-2 sm:col-span-1">
-                      <span className="text-text-muted text-[10px] block mb-0.5">Chofer / Transportista:</span>
-                      <p className="font-semibold text-foreground truncate">{activeTx.entregado_por}</p>
-                    </div>
+                    <>
+                      <div className="col-span-2 sm:col-span-1">
+                        <span className="text-text-muted text-[10px] block mb-0.5">Empresa de Transporte:</span>
+                        <p className="font-semibold text-foreground truncate uppercase">{activeTx.empresa_transporte || 'Manual / Ajuste'}</p>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1">
+                        <span className="text-text-muted text-[10px] block mb-0.5">Chofer / Conductor:</span>
+                        <p className="font-semibold text-foreground truncate uppercase">{activeTx.entregado_por}</p>
+                      </div>
+                      {activeTx.conductor_dni && (
+                        <div className="col-span-2 sm:col-span-1">
+                          <span className="text-text-muted text-[10px] block mb-0.5">DNI del Conductor:</span>
+                          <p className="font-semibold text-foreground font-mono uppercase">{activeTx.conductor_dni}</p>
+                        </div>
+                      )}
+                      {activeTx.placa_remolque && (
+                        <div className="col-span-2 sm:col-span-1">
+                          <span className="text-text-muted text-[10px] block mb-0.5">Placas Vehículo:</span>
+                          <p className="font-semibold text-foreground font-mono uppercase">
+                            {activeTx.placa_remolque} {activeTx.placa_semiremolque ? `/ ${activeTx.placa_semiremolque}` : ''}
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
                   {activeTx.type === 'dispatch' && (
                     <div className="col-span-2 sm:col-span-1">

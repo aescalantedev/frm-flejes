@@ -295,7 +295,10 @@ export default function DetailDrawer({
 
                       <span className="text-[10px] text-text-muted font-medium">Fleje #{num}</span>
                       <span className="text-base font-bold text-accent font-mono mt-0.5">{fleje.peso.toFixed(2)}</span>
-                      <span className="text-[10px] text-text-muted font-mono">kg</span>
+                      <span className="text-[10px] text-text-muted font-mono mb-1.5">kg</span>
+                      <span className="text-[9px] text-text-muted font-mono bg-bg/50 px-1.5 py-0.5 rounded border border-border/30 truncate max-w-[90%] font-bold uppercase">
+                        {fleje.medida || torre.nombre_medida}
+                      </span>
                     </div>
                   )
                 })}

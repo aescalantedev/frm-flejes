@@ -256,6 +256,8 @@ export default function PanoramaView({
               
               if (isOccupied && fleje) {
                 const isSelected = dispatchActive && dispatchCart.some(item => item.id === fleje.id)
+                const showDiffMeasure = fleje.medida && fleje.medida !== torre.nombre_medida
+
                 visualStack.push(
                   <div 
                     key={i} 
@@ -277,11 +279,25 @@ export default function PanoramaView({
                     `}
                   >
                     <span className={`text-[9px] font-semibold font-mono ${isSelected ? 'text-white/80' : 'text-text-muted'}`}>#{itemIndex + 1}</span>
-                    <span className="text-xs font-bold font-mono">{fleje.peso.toFixed(2)} kg</span>
+                    <div className="flex items-center gap-1.5 overflow-hidden">
+                      <span className="text-xs font-bold font-mono truncate">{fleje.peso.toFixed(2)} kg</span>
+                      {showDiffMeasure && (
+                        <span 
+                          title={`Medida diferente: ${fleje.medida}`}
+                          className={`text-[8px] font-extrabold px-1 py-0.5 rounded border leading-none font-mono uppercase shrink-0 ${
+                            isSelected
+                              ? 'bg-white text-warning border-white'
+                              : 'bg-warning/15 text-warning border-warning/30 animate-pulse'
+                          }`}
+                        >
+                          {fleje.medida}
+                        </span>
+                      )}
+                    </div>
                     {isSelected ? (
                       <Check className="w-3.5 h-3.5 text-white animate-scaleUp shrink-0" />
                     ) : (
-                      <span className="text-[9px] text-text-muted font-mono">kg</span>
+                      <span className="text-[9px] text-text-muted font-mono shrink-0">kg</span>
                     )}
                   </div>
                 )

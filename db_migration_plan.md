@@ -112,6 +112,71 @@ CREATE POLICY "Permitir todo a torres" ON torres FOR ALL USING (true) WITH CHECK
 CREATE POLICY "Permitir todo a inventario" ON inventario FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo a historial" ON historial FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo a active_sessions" ON active_sessions FOR ALL USING (true) WITH CHECK (true);
+
+-- ========================================================
+-- 8. TABLAS DE GESTIÓN DE TRANSPORTES (Empresas, Placas, Conductores)
+-- ========================================================
+CREATE TABLE empresas_transporte (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE placas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id UUID REFERENCES empresas_transporte(id) ON DELETE CASCADE NOT NULL,
+  placa_remolque TEXT NOT NULL,
+  placa_semiremolque TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(placa_remolque, placa_semiremolque)
+);
+
+CREATE TABLE conductores (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id UUID REFERENCES empresas_transporte(id) ON DELETE CASCADE NOT NULL,
+  dni TEXT UNIQUE NOT NULL,
+  nombre TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Ampliación de recepciones
+ALTER TABLE recepciones ADD COLUMN IF NOT EXISTS empresa_transporte TEXT;
+ALTER TABLE recepciones ADD COLUMN IF NOT EXISTS placa_remolque TEXT;
+ALTER TABLE recepciones ADD COLUMN IF NOT EXISTS placa_semiremolque TEXT;
+ALTER TABLE recepciones ADD COLUMN IF NOT EXISTS conductor_dni TEXT;
+
+-- RLS y políticas
+ALTER TABLE empresas_transporte ENABLE ROW LEVEL SECURITY;
+ALTER TABLE placas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conductores ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Permitir todo a empresas_transporte" ON empresas_transporte FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permitir todo a placas" ON placas FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permitir todo a conductores" ON conductores FOR ALL USING (true) WITH CHECK (true);
+
+-- ========================================================
+-- 9. DATOS DE FLOTA INICIALES (Población desde la lista autorizada)
+-- ========================================================
+INSERT INTO empresas_transporte (nombre)
+VALUES 
+  ('JRM'),
+  ('GRUPO REC')
+ON CONFLICT (nombre) DO NOTHING;
+
+INSERT INTO placas (empresa_id, placa_remolque, placa_semiremolque)
+VALUES
+  ((SELECT id FROM empresas_transporte WHERE nombre = 'JRM'), 'BCW838', 'ARB976'),
+  ((SELECT id FROM empresas_transporte WHERE nombre = 'GRUPO REC'), 'D5H756', 'W2Y765'),
+  ((SELECT id FROM empresas_transporte WHERE nombre = 'GRUPO REC'), 'B1B-820', 'B1Q-983')
+ON CONFLICT (placa_remolque, placa_semiremolque) DO NOTHING;
+
+INSERT INTO conductores (empresa_id, dni, nombre)
+VALUES
+  ((SELECT id FROM empresas_transporte WHERE nombre = 'GRUPO REC'), 'Q20006531', 'MANUEL JAIME GUTARRA HUAMAN'),
+  ((SELECT id FROM empresas_transporte WHERE nombre = 'GRUPO REC'), 'Q45254576', 'JHAIR SAMUEL HUACHOS ORIHUELA'),
+  ((SELECT id FROM empresas_transporte WHERE nombre = 'GRUPO REC'), 'Q44017007', 'ELISEO IGNACIO TENORIO SOLIS'),
+  ((SELECT id FROM empresas_transporte WHERE nombre = 'JRM'), 'Q42212220', 'JESUS MANUEL')
+ON CONFLICT (dni) DO NOTHING;
 ```
 
 ---

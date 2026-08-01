@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { User, Lock, Sliders, Database, Info, Paintbrush, Bell, Shield, HelpCircle, Check, LogOut, Eye, EyeOff } from 'lucide-react'
+import { User, Lock, Sliders, Database, Info, Paintbrush, Bell, Shield, HelpCircle, Check, LogOut, Eye, EyeOff, Truck, Plus, Trash2, RefreshCw } from 'lucide-react'
 import { themes, applyTheme } from '../lib/theme'
 import { supabase } from '../lib/supabase'
 import { useQueryClient } from '@tanstack/react-query'
@@ -16,63 +16,6 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
   const [profileEmail, setProfileEmail] = useState(userProfile?.email || 'admin@flejes.com')
   const [procesandoProfile, setProcesandoProfile] = useState(false)
 
-  // User Management state
-  const [profilesList, setProfilesList] = useState([])
-  const [loadingProfiles, setLoadingProfiles] = useState(false)
-
-  const fetchProfiles = async () => {
-    setLoadingProfiles(true)
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: true })
-      if (!error && data) {
-        setProfilesList(data)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoadingProfiles(false)
-    }
-  }
-
-  useEffect(() => {
-    if (activeTab === 'users' && userProfile?.rol === 'Administrador') {
-      fetchProfiles()
-    }
-  }, [activeTab])
-
-  const handleChangeUserRole = async (userId, newRole) => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ rol: newRole })
-        .eq('id', userId)
-      if (error) throw error
-      showToast('Rol de usuario actualizado con éxito')
-      fetchProfiles()
-    } catch (err) {
-      console.error(err)
-      showToast('Error al actualizar rol de usuario', true)
-    }
-  }
-
-  const handleToggleUserApproval = async (userId, currentStatus) => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ aprobado: !currentStatus })
-        .eq('id', userId)
-      if (error) throw error
-      showToast(`Usuario ${!currentStatus ? 'aprobado' : 'desactivado'} con éxito`)
-      fetchProfiles()
-    } catch (err) {
-      console.error(err)
-      showToast('Error al actualizar estado del usuario', true)
-    }
-  }
-
   // Password state
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -83,6 +26,195 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   // Preferences state
+  const [transportSubTab, setTransportSubTab] = useState('empresas')
+  const [empresas, setEmpresas] = useState([])
+  const [placas, setPlacas] = useState([])
+  const [conductores, setConductores] = useState([])
+  const [loadingTransport, setLoadingTransport] = useState(false)
+
+  // Form states
+  const [newEmpresaNombre, setNewEmpresaNombre] = useState('')
+  const [newPlacaEmpresaId, setNewPlacaEmpresaId] = useState('')
+  const [newPlacaRemolque, setNewPlacaRemolque] = useState('')
+  const [newPlacaSemiremolque, setNewPlacaSemiremolque] = useState('')
+  const [newConductorEmpresaId, setNewConductorEmpresaId] = useState('')
+  const [newConductorDni, setNewConductorDni] = useState('')
+  const [newConductorNombre, setNewConductorNombre] = useState('')
+
+  const fetchTransportData = async () => {
+    setLoadingTransport(true)
+    try {
+      const { data: empData, error: empErr } = await supabase
+        .from('empresas_transporte')
+        .select('*')
+        .order('nombre', { ascending: true })
+      if (empErr) throw empErr
+      setEmpresas(empData || [])
+
+      const { data: placData, error: placErr } = await supabase
+        .from('placas')
+        .select(`
+          id,
+          empresa_id,
+          placa_remolque,
+          placa_semiremolque,
+          created_at,
+          empresas_transporte (
+            nombre
+          )
+        `)
+        .order('created_at', { ascending: false })
+      if (placErr) throw placErr
+      setPlacas(placData || [])
+
+      const { data: condData, error: condErr } = await supabase
+        .from('conductores')
+        .select(`
+          id,
+          empresa_id,
+          dni,
+          nombre,
+          created_at,
+          empresas_transporte (
+            nombre
+          )
+        `)
+        .order('nombre', { ascending: true })
+      if (condErr) throw condErr
+      setConductores(condData || [])
+    } catch (err) {
+      console.error(err)
+      showToast('Error al cargar datos de transporte', true)
+    } finally {
+      setLoadingTransport(false)
+    }
+  }
+
+  const handleCreateEmpresa = async (e) => {
+    e.preventDefault()
+    if (!newEmpresaNombre.trim()) {
+      showToast('Ingresa el nombre de la empresa', true)
+      return
+    }
+    try {
+      const { error } = await supabase
+        .from('empresas_transporte')
+        .insert([{ nombre: newEmpresaNombre.trim().toUpperCase() }])
+      if (error) throw error
+      showToast('Empresa de transporte registrada')
+      setNewEmpresaNombre('')
+      fetchTransportData()
+    } catch (err) {
+      console.error(err)
+      showToast(err.message || 'Error al registrar empresa', true)
+    }
+  }
+
+  const handleDeleteEmpresa = async (id) => {
+    if (!window.confirm('¿Estás seguro de eliminar esta empresa? Se borrarán sus conductores y vehículos asociados.')) return
+    try {
+      const { error } = await supabase
+        .from('empresas_transporte')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+      showToast('Empresa eliminada exitosamente')
+      fetchTransportData()
+    } catch (err) {
+      console.error(err)
+      showToast(err.message || 'Error al eliminar empresa', true)
+    }
+  }
+
+  const handleCreatePlaca = async (e) => {
+    e.preventDefault()
+    if (!newPlacaEmpresaId) {
+      showToast('Selecciona una empresa', true)
+      return
+    }
+    if (!newPlacaRemolque.trim()) {
+      showToast('Ingresa la placa de remolque', true)
+      return
+    }
+    try {
+      const { error } = await supabase
+        .from('placas')
+        .insert([{
+          empresa_id: newPlacaEmpresaId,
+          placa_remolque: newPlacaRemolque.trim().toUpperCase(),
+          placa_semiremolque: newPlacaSemiremolque.trim().toUpperCase() || null
+        }])
+      if (error) throw error
+      showToast('Placas registradas exitosamente')
+      setNewPlacaRemolque('')
+      setNewPlacaSemiremolque('')
+      fetchTransportData()
+    } catch (err) {
+      console.error(err)
+      showToast(err.message || 'Error al registrar placas', true)
+    }
+  }
+
+  const handleDeletePlaca = async (id) => {
+    if (!window.confirm('¿Estás seguro de eliminar este vehículo?')) return
+    try {
+      const { error } = await supabase
+        .from('placas')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+      showToast('Vehículo eliminado exitosamente')
+      fetchTransportData()
+    } catch (err) {
+      console.error(err)
+      showToast(err.message || 'Error al eliminar vehículo', true)
+    }
+  }
+
+  const handleCreateConductor = async (e) => {
+    e.preventDefault()
+    if (!newConductorEmpresaId) {
+      showToast('Selecciona una empresa', true)
+      return
+    }
+    if (!newConductorDni.trim() || !newConductorNombre.trim()) {
+      showToast('Ingresa el DNI y Nombre del conductor', true)
+      return
+    }
+    try {
+      const { error } = await supabase
+        .from('conductores')
+        .insert([{
+          empresa_id: newConductorEmpresaId,
+          dni: newConductorDni.trim().toUpperCase(),
+          nombre: newConductorNombre.trim().toUpperCase()
+        }])
+      if (error) throw error
+      showToast('Conductor registrado exitosamente')
+      setNewConductorDni('')
+      setNewConductorNombre('')
+      fetchTransportData()
+    } catch (err) {
+      console.error(err)
+      showToast(err.message || 'Error al registrar conductor', true)
+    }
+  }
+
+  const handleDeleteConductor = async (id) => {
+    if (!window.confirm('¿Estás seguro de eliminar este conductor?')) return
+    try {
+      const { error } = await supabase
+        .from('conductores')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+      showToast('Conductor eliminado exitosamente')
+      fetchTransportData()
+    } catch (err) {
+      console.error(err)
+      showToast(err.message || 'Error al eliminar conductor', true)
+    }
+  }
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('theme') || 'darkMinimal')
   const [soundAlerts, setSoundAlerts] = useState(() => localStorage.getItem('soundAlerts') === 'true')
   const [unitSystem, setUnitSystem] = useState(() => localStorage.getItem('unitSystem') || 'kg')
@@ -268,7 +400,6 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
   
   if (userProfile?.rol === 'Administrador') {
     tabs.push({ id: 'backup', label: 'Backup', icon: Database })
-    tabs.push({ id: 'users', label: 'Usuarios y Roles', icon: Shield })
   }
 
   return (
@@ -659,107 +790,6 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
               </div>
             </div>
           )}
-          {/* TAB: USERS & ROLES */}
-          {activeTab === 'users' && userProfile?.rol === 'Administrador' && (
-            <div className="bg-surface border border-border rounded-2xl p-6 shadow-xs space-y-6 animate-fadeIn">
-              <div className="flex justify-between items-center border-b border-border/40 pb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">Gestión de Usuarios y Roles</h3>
-                  <p className="text-[11px] text-text-muted">Administra los permisos de los operadores de la planta.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={fetchProfiles}
-                  disabled={loadingProfiles}
-                  className="bg-bg hover:bg-surface-hover text-text-muted hover:text-foreground text-xs font-semibold px-3 py-1.5 rounded-xl border border-border cursor-pointer transition-colors"
-                >
-                  Refrescar Lista
-                </button>
-              </div>
-
-              {loadingProfiles ? (
-                <div className="text-center py-12 text-xs text-text-muted animate-pulse font-semibold">
-                  Cargando listado de usuarios...
-                </div>
-              ) : profilesList.length === 0 ? (
-                <div className="text-center py-12 text-xs text-text-muted italic border border-dashed border-border rounded-2xl bg-bg/25">
-                  No hay usuarios registrados en la base de datos de perfiles.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-border/60 text-text-muted font-bold">
-                        <th className="py-2.5 px-3">Nombre</th>
-                        <th className="py-2.5 px-3">Correo Electrónico</th>
-                        <th className="py-2.5 px-3">Rol de Acceso</th>
-                        <th className="py-2.5 px-3">Estado</th>
-                        <th className="py-2.5 px-3">Acción</th>
-                        <th className="py-2.5 px-3 text-right">Fecha Registro</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/20">
-                      {profilesList.map((user) => {
-                        const isSelf = user.id === userProfile.id
-                        return (
-                          <tr key={user.id} className="hover:bg-bg/20 transition-colors font-medium">
-                            <td className="py-3.5 px-3 text-foreground font-bold">{user.name} {isSelf && <span className="text-[9px] bg-accent/15 text-accent px-1.5 py-0.5 rounded-md ml-1 font-semibold">Tú</span>}</td>
-                            <td className="py-3.5 px-3 text-text-muted font-mono">{user.email}</td>
-                            <td className="py-3.5 px-3">
-                              <select
-                                value={user.rol}
-                                disabled={isSelf}
-                                onChange={(e) => handleChangeUserRole(user.id, e.target.value)}
-                                className={`
-                                  bg-bg border border-border text-foreground rounded-lg py-1 px-2.5 text-[11px] outline-none cursor-pointer font-semibold
-                                  ${isSelf ? 'opacity-60 cursor-not-allowed select-none bg-bg/50' : 'hover:border-accent'}
-                                `}
-                              >
-                                <option value="Operador">Operador (Planta)</option>
-                                <option value="Administrador">Administrador</option>
-                              </select>
-                            </td>
-                            <td className="py-3.5 px-3">
-                              {user.aprobado ? (
-                                <span className="text-[10px] bg-success/15 text-success border border-success/30 px-2.5 py-1 rounded-lg font-bold">
-                                  Activo
-                                </span>
-                              ) : (
-                                <span className="text-[10px] bg-warning/15 text-warning border border-warning/30 px-2.5 py-1 rounded-lg font-bold animate-pulse">
-                                  Pendiente
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-3">
-                              {isSelf ? (
-                                <span className="text-[10px] text-text-muted italic">Inmutable</span>
-                              ) : (
-                                <button
-                                  onClick={() => handleToggleUserApproval(user.id, !!user.aprobado)}
-                                  className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer
-                                    ${user.aprobado 
-                                      ? 'bg-destructive/10 hover:bg-destructive/20 border-destructive/20 text-destructive' 
-                                      : 'bg-success/10 hover:bg-success/20 border-success/20 text-success'
-                                    }
-                                  `}
-                                >
-                                  {user.aprobado ? 'Desactivar' : 'Aprobar'}
-                                </button>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-3 text-right text-text-muted font-mono">
-                              {new Date(user.created_at).toLocaleDateString()}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
         </div>
 
       </div>

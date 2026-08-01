@@ -7,7 +7,9 @@ import {
   ChevronLeft, 
   ChevronRight, 
   LogOut, 
-  User 
+  User,
+  Truck,
+  Users
 } from 'lucide-react'
 
 export default function Sidebar({ 
@@ -39,6 +41,13 @@ export default function Sidebar({
         { id: 'panorama', label: 'Panorama', icon: LayoutDashboard },
         userProfile?.rol === 'Administrador' && { id: 'torres', label: 'Torres', icon: Layers },
         { id: 'historial', label: 'Historial', icon: History }
+      ].filter(Boolean)
+    },
+    {
+      category: 'Administración',
+      items: [
+        { id: 'transport', label: 'Gestión de Transporte', icon: Truck },
+        userProfile?.rol === 'Administrador' && { id: 'users', label: 'Usuarios y Roles', icon: Users }
       ].filter(Boolean)
     },
     {

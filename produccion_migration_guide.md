@@ -176,3 +176,84 @@ Para que la subida y compresión de fotos de camiones funcione:
 3. Crea un nuevo **Bucket** (New Bucket).
 4. Configura el nombre exactamente como **`fotos`**.
 5. Asegúrate de marcar la casilla **Public Bucket** (para que las URLs de auditoría se puedan visualizar de forma directa en el historial del administrador).
+
+---
+
+## PASO 8: Módulo de Gestión de Transportes (Empresas, Placas y Conductores)
+Para habilitar el catálogo de flotas autorizadas, ejecuta las siguientes instrucciones en tu SQL Editor:
+
+```sql
+-- 1. Crear tabla de Empresas
+CREATE TABLE IF NOT EXISTS public.empresas_transporte (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 2. Crear tabla de Placas
+CREATE TABLE IF NOT EXISTS public.placas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id UUID REFERENCES public.empresas_transporte(id) ON DELETE CASCADE NOT NULL,
+  placa_remolque TEXT NOT NULL,
+  placa_semiremolque TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(placa_remolque, placa_semiremolque)
+);
+
+-- 3. Crear tabla de Conductores
+CREATE TABLE IF NOT EXISTS public.conductores (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id UUID REFERENCES public.empresas_transporte(id) ON DELETE CASCADE NOT NULL,
+  dni TEXT UNIQUE NOT NULL,
+  nombre TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 4. Ampliar tabla de recepciones
+ALTER TABLE public.recepciones ADD COLUMN IF NOT EXISTS empresa_transporte TEXT;
+ALTER TABLE public.recepciones ADD COLUMN IF NOT EXISTS placa_remolque TEXT;
+ALTER TABLE public.recepciones ADD COLUMN IF NOT EXISTS placa_semiremolque TEXT;
+ALTER TABLE public.recepciones ADD COLUMN IF NOT EXISTS conductor_dni TEXT;
+
+-- 5. Habilitar RLS en las nuevas tablas
+ALTER TABLE public.empresas_transporte ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.placas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conductores ENABLE ROW LEVEL SECURITY;
+
+-- 6. Políticas de lectura pública para autenticados
+CREATE POLICY "Permitir lectura a autenticados en empresas" ON public.empresas_transporte FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Permitir lectura a autenticados en placas" ON public.placas FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Permitir lectura a autenticados en conductores" ON public.conductores FOR SELECT TO authenticated USING (true);
+
+-- 7. Políticas de escritura exclusivas para Administradores
+CREATE POLICY "Permitir todo a Administradores en empresas" ON public.empresas_transporte FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND rol = 'Administrador'));
+
+CREATE POLICY "Permitir todo a Administradores en placas" ON public.placas FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND rol = 'Administrador'));
+
+CREATE POLICY "Permitir todo a Administradores en conductores" ON public.conductores FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND rol = 'Administrador'));
+
+-- 8. Registrar Datos Iniciales (Población desde la lista autorizada)
+INSERT INTO public.empresas_transporte (nombre)
+VALUES 
+  ('JRM'),
+  ('GRUPO REC')
+ON CONFLICT (nombre) DO NOTHING;
+
+INSERT INTO public.placas (empresa_id, placa_remolque, placa_semiremolque)
+VALUES
+  ((SELECT id FROM public.empresas_transporte WHERE nombre = 'JRM'), 'BCW838', 'ARB976'),
+  ((SELECT id FROM public.empresas_transporte WHERE nombre = 'GRUPO REC'), 'D5H756', 'W2Y765'),
+  ((SELECT id FROM public.empresas_transporte WHERE nombre = 'GRUPO REC'), 'B1B-820', 'B1Q-983')
+ON CONFLICT (placa_remolque, placa_semiremolque) DO NOTHING;
+
+INSERT INTO public.conductores (empresa_id, dni, nombre)
+VALUES
+  ((SELECT id FROM public.empresas_transporte WHERE nombre = 'GRUPO REC'), 'Q20006531', 'MANUEL JAIME GUTARRA HUAMAN'),
+  ((SELECT id FROM public.empresas_transporte WHERE nombre = 'GRUPO REC'), 'Q45254576', 'JHAIR SAMUEL HUACHOS ORIHUELA'),
+  ((SELECT id FROM public.empresas_transporte WHERE nombre = 'GRUPO REC'), 'Q44017007', 'ELISEO IGNACIO TENORIO SOLIS'),
+  ((SELECT id FROM public.empresas_transporte WHERE nombre = 'JRM'), 'Q42212220', 'JESUS MANUEL')
+ON CONFLICT (dni) DO NOTHING;
+```
