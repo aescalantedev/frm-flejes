@@ -247,6 +247,27 @@ export default function PanoramaView({
             const isFull = cantidadActual >= capMax
             const isDimmed = dispatchActive && isEmpty
 
+            // Lógica física: Solo se puede tomar el fleje libre más alto, o devolver el fleje seleccionado más bajo
+            let highestUnselectedIdx = -1
+            let lowestSelectedIdx = -1
+
+            if (dispatchActive) {
+              for (let j = cantidadActual - 1; j >= 0; j--) {
+                const isSel = dispatchCart.some(item => item.id === flejes[j].id)
+                if (!isSel) {
+                  highestUnselectedIdx = j
+                  break
+                }
+              }
+              for (let j = 0; j < cantidadActual; j++) {
+                const isSel = dispatchCart.some(item => item.id === flejes[j].id)
+                if (isSel) {
+                  lowestSelectedIdx = j
+                  break
+                }
+              }
+            }
+
             // Generar visualización de los pesos en la derecha (antiguo al tope, reciente a la base)
             const visualStack = []
             for (let i = 0; i < capMax; i++) {
@@ -256,6 +277,7 @@ export default function PanoramaView({
               
               if (isOccupied && fleje) {
                 const isSelected = dispatchActive && dispatchCart.some(item => item.id === fleje.id)
+                const canSelect = !dispatchActive || (itemIndex === highestUnselectedIdx || itemIndex === lowestSelectedIdx)
                 const showDiffMeasure = fleje.medida && fleje.medida !== torre.nombre_medida
 
                 visualStack.push(
@@ -264,15 +286,19 @@ export default function PanoramaView({
                     onClick={(e) => {
                       if (dispatchActive) {
                         e.stopPropagation() // Evita clicks en el card
-                        onToggleSelectFleje(fleje)
+                        if (canSelect) {
+                          onToggleSelectFleje(fleje)
+                        }
                       }
                     }}
                     className={`
                       border rounded-xl px-3 py-1.5 flex items-center justify-between transition-all select-none min-h-[34px]
-                      ${dispatchActive ? 'cursor-pointer active:scale-95' : ''}
+                      ${dispatchActive && canSelect ? 'cursor-pointer active:scale-95' : ''}
+                      ${dispatchActive && !canSelect && !isSelected ? 'opacity-40 cursor-not-allowed' : ''}
+                      ${dispatchActive && !canSelect && isSelected ? 'opacity-80 cursor-not-allowed' : ''}
                       ${isSelected 
                         ? 'bg-warning text-white border-warning shadow-md scale-98 font-bold' 
-                        : dispatchActive
+                        : dispatchActive && canSelect
                           ? 'bg-surface border-accent/40 text-accent hover:bg-accent/5'
                           : 'bg-accent/10 border-accent/30 text-accent'
                       }

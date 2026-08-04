@@ -747,21 +747,26 @@ function App() {
     }
   }
 
-  // Edit Strapping Band (Fleje) weight
-  const handleEditarFleje = async (id, nuevoPeso) => {
+  // Edit Strapping Band (Fleje) weight and/or medida
+  const handleEditarFleje = async (id, nuevoPeso, nuevaMedida) => {
     if (isNaN(nuevoPeso) || nuevoPeso <= 0) {
       showToast('El peso debe ser un número positivo', true)
       return false
     }
 
     try {
+      const updateData = { peso: nuevoPeso }
+      if (nuevaMedida !== undefined) {
+        updateData.medida = nuevaMedida || null
+      }
+
       const { error } = await supabase
         .from('inventario')
-        .update({ peso: nuevoPeso })
+        .update(updateData)
         .eq('id', id)
 
       if (error) throw error
-      showToast('Peso del fleje actualizado')
+      showToast('Datos del fleje actualizados')
       queryClient.invalidateQueries({ queryKey: ['torres'] })
       return true
     } catch (e) {

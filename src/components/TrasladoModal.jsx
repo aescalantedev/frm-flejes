@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { X, FileText, ArrowRightLeft, MapPin } from 'lucide-react'
+import { X, FileText, ArrowRightLeft, MapPin, AlertTriangle } from 'lucide-react'
 
 export default function TrasladoModal({ 
   torreId, 
@@ -17,6 +17,13 @@ export default function TrasladoModal({
 
   const torre = torres.find(t => t.id === torreId)
   const flejes = inventario[torreId] || []
+  const topFleje = flejes.length > 0 ? flejes[flejes.length - 1] : null
+
+  React.useEffect(() => {
+    if (topFleje) {
+      setFlejeId(topFleje.id)
+    }
+  }, [topFleje])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -79,15 +86,21 @@ export default function TrasladoModal({
                 value={flejeId}
                 onChange={(e) => setFlejeId(e.target.value)}
                 required
-                className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent transition-colors cursor-pointer"
+                disabled
+                className="w-full bg-bg/50 border border-border rounded-xl px-4 py-2.5 text-foreground font-bold text-sm outline-none opacity-80 cursor-not-allowed"
               >
-                <option value="">-- Seleccionar Fleje --</option>
-                {flejes.map((f, i) => (
-                  <option key={f.id} value={f.id}>
-                    Fleje #{i + 1} ({f.peso.toFixed(2)} kg)
+                {topFleje ? (
+                  <option value={topFleje.id}>
+                    Fleje #{flejes.length} ({topFleje.peso.toFixed(2)} kg) - En Cima
                   </option>
-                ))}
+                ) : (
+                  <option value="">-- No hay flejes --</option>
+                )}
               </select>
+              <p className="text-[10px] text-warning mt-1.5 flex items-center gap-1.5 font-medium">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Por física, solo puedes despachar el fleje que está en la cima.
+              </p>
             </div>
 
             {/* Motivo */}

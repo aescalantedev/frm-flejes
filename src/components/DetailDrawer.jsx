@@ -15,9 +15,10 @@ export default function DetailDrawer({
   // Estado del menú de opciones de fleje activo (Bottom Sheet / Dialog)
   const [activeFlejeMenu, setActiveFlejeMenu] = useState(null) // { id, num, peso }
   
-  // Estado del modal de edición de peso
-  const [editModalConfig, setEditModalConfig] = useState(null) // { id, num, peso }
+  // Estado del modal de edición de peso y medida
+  const [editModalConfig, setEditModalConfig] = useState(null) // { id, num, peso, medida }
   const [editPeso, setEditPeso] = useState('')
+  const [editMedida, setEditMedida] = useState('')
 
   // Estado de confirmación local personalizado (Tailwind CSS Modal)
   const [confirmConfig, setConfirmConfig] = useState(null) // { title, message, type, onConfirm }
@@ -79,10 +80,11 @@ export default function DetailDrawer({
     setSelectionMode(false)
   }
 
-  // Configuración de la edición de peso
+  // Configuración de la edición de peso y medida
   const handleStartEdit = (fleje, num) => {
-    setEditModalConfig({ id: fleje.id, num, peso: fleje.peso })
+    setEditModalConfig({ id: fleje.id, num, peso: fleje.peso, medida: fleje.medida || '' })
     setEditPeso(String(fleje.peso))
+    setEditMedida(fleje.medida || '')
   }
 
   const handleSaveEditClick = () => {
@@ -93,12 +95,26 @@ export default function DetailDrawer({
     }
     
     // Abrir confirmación
+    const msgChanges = []
+    if (editPeso !== String(editModalConfig.peso)) {
+      msgChanges.push(`peso de ${editModalConfig.peso.toFixed(2)} kg a ${val.toFixed(2)} kg`)
+    }
+    const finalMedida = editMedida.trim()
+    if (finalMedida !== editModalConfig.medida) {
+      msgChanges.push(`medida a ${finalMedida || 'la predeterminada de la torre'}`)
+    }
+    
+    if (msgChanges.length === 0) {
+      setEditModalConfig(null)
+      return
+    }
+
     setConfirmConfig({
       title: 'Confirmar Modificación',
-      message: `¿Estás seguro de cambiar el peso del Fleje #${editModalConfig.num} de ${editModalConfig.peso.toFixed(2)} kg a ${val.toFixed(2)} kg?`,
+      message: `¿Estás seguro de cambiar el ${msgChanges.join(' y la ')} del Fleje #${editModalConfig.num}?`,
       type: 'warning',
       onConfirm: async () => {
-        await onEditarFleje(editModalConfig.id, val)
+        await onEditarFleje(editModalConfig.id, val, finalMedida)
         setEditModalConfig(null)
         setConfirmConfig(null)
       }
@@ -404,24 +420,40 @@ export default function DetailDrawer({
           
           <div className="bg-surface border border-border rounded-2xl p-6 shadow-2xl max-w-sm w-full relative z-10 space-y-4 animate-scaleUp text-left">
             <div>
-              <h4 className="font-bold text-base text-foreground tracking-tight">Modificar Peso</h4>
-              <p className="text-xs text-text-muted mt-0.5">Ingresa el nuevo peso para el Fleje #{editModalConfig.num}</p>
+              <h4 className="font-bold text-base text-foreground tracking-tight">Modificar Fleje</h4>
+              <p className="text-xs text-text-muted mt-0.5">Ingresa los nuevos datos para el Fleje #{editModalConfig.num}</p>
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider">Nuevo Peso</label>
-              <div className="relative">
-                <input 
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  required
-                  value={editPeso}
-                  onChange={(e) => setEditPeso(e.target.value)}
-                  className="w-full bg-bg border border-border focus:border-accent rounded-xl px-4 py-2.5 pr-10 text-sm font-bold font-mono outline-none"
-                  placeholder="0.00"
-                />
-                <span className="text-xs font-bold text-text-muted absolute right-4 top-1/2 -translate-y-1/2">kg</span>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider">Nuevo Peso</label>
+                <div className="relative">
+                  <input 
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={editPeso}
+                    onChange={(e) => setEditPeso(e.target.value)}
+                    className="w-full bg-bg border border-border focus:border-accent rounded-xl px-4 py-2.5 pr-10 text-sm font-bold font-mono outline-none"
+                    placeholder="0.00"
+                  />
+                  <span className="text-xs font-bold text-text-muted absolute right-4 top-1/2 -translate-y-1/2">kg</span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider">Medida (Opcional)</label>
+                <div className="relative">
+                  <input 
+                    type="text"
+                    value={editMedida}
+                    onChange={(e) => setEditMedida(e.target.value.toUpperCase())}
+                    className="w-full bg-bg border border-border focus:border-accent rounded-xl px-4 py-2.5 text-sm font-bold font-mono outline-none uppercase placeholder:normal-case placeholder:font-sans placeholder:font-medium placeholder:text-text-muted/40"
+                    placeholder={`Ej. ${torre?.nombre_medida || '100X2.0'}`}
+                  />
+                </div>
+                <p className="text-[10px] text-text-muted/60 mt-1">Si dejas esto en blanco, se usará la medida por defecto de la torre.</p>
               </div>
             </div>
 

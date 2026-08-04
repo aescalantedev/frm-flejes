@@ -202,20 +202,21 @@ Una vez que los datos iniciales han sido cargados con el script de importación,
 -- 7. TRIGGERS PARA CONTROL AUTOMÁTICO DE GRAVEDAD
 -- ========================================================
 
--- Trigger de Inserción: Desplaza hacia arriba y asigna secuencia = 1 al nuevo fleje
+-- Trigger de Inserción: Coloca el nuevo fleje en la cima de la torre (secuencia más alta + 1)
 CREATE OR REPLACE FUNCTION trg_inventario_insert()
 RETURNS TRIGGER AS $$
+DECLARE
+  max_secuencia INTEGER;
 BEGIN
   IF NEW.torre_id IS NULL THEN
     NEW.secuencia := NULL;
   ELSE
-    -- Desplazar secuencias existentes de la torre hacia arriba
-    UPDATE inventario 
-    SET secuencia = secuencia + 1 
+    -- El nuevo fleje siempre entra en la cima (sobre los existentes)
+    SELECT COALESCE(MAX(secuencia), 0) INTO max_secuencia
+    FROM inventario
     WHERE torre_id = NEW.torre_id;
     
-    -- El nuevo fleje siempre entra en la base (secuencia = 1)
-    NEW.secuencia := 1;
+    NEW.secuencia := max_secuencia + 1;
   END IF;
   RETURN NEW;
 END;
