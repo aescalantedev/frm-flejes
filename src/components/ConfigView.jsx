@@ -642,39 +642,101 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
               <div className="space-y-3">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1">
                   <Paintbrush className="w-3.5 h-3.5 text-text-muted/60" />
-                  Tema de Colores (Material 3 / Minimal)
+                  Tema de Apariencia
                 </label>
+
+                {/* Oscuros */}
+                <p className="text-[10px] text-text-muted uppercase tracking-widest font-bold mt-1">— Oscuros</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {Object.entries(themes).map(([key, theme]) => {
+                  {Object.entries(themes).filter(([, t]) => {
+                    const bg = t.colors.bg
+                    // Light themes have high luminance (starts with #F or #FA etc.)
+                    return !['#F8', '#FA', '#F5'].some(p => bg.toUpperCase().startsWith(p))
+                  }).map(([key, theme]) => {
                     const isSelected = currentTheme === key
                     return (
                       <button
                         key={key}
                         onClick={() => handleSelectTheme(key)}
                         className={`
-                          p-3 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between h-20 group relative overflow-hidden
-                          ${isSelected 
-                            ? 'border-accent bg-accent/5 ring-1 ring-accent' 
-                            : 'border-border bg-bg/50 hover:bg-surface-hover hover:border-border/80'
+                          p-3 rounded-xl border text-left cursor-pointer transition-all flex flex-col gap-2 group relative overflow-hidden
+                          ${isSelected
+                            ? 'border-accent ring-1 ring-accent shadow-md'
+                            : 'border-border hover:border-border/80 hover:shadow-sm'
                           }
                         `}
+                        style={{ backgroundColor: theme.colors.bg }}
                       >
-                        <span className="text-[10px] font-bold text-foreground group-hover:text-accent transition-colors truncate w-full z-10">
+                        {/* Accent dot */}
+                        <div className="flex items-center justify-between">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.colors.accent }} />
+                          {isSelected && (
+                            <div className="w-4 h-4 rounded-full bg-accent text-white flex items-center justify-center shrink-0">
+                              <Check className="w-2.5 h-2.5" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-bold truncate w-full" style={{ color: theme.colors.text }}>
                           {theme.name}
                         </span>
-                        
-                        {/* Theme Colors Preview */}
-                        <div className="flex gap-1.5 mt-auto z-10">
-                          <span className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: theme.colors.bg }} title="Background" />
-                          <span className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: theme.colors.surface }} title="Surface" />
-                          <span className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: theme.colors.accent }} title="Accent" />
-                        </div>
-
-                        {isSelected && (
-                          <div className="absolute right-2 bottom-2 w-4 h-4 rounded-full bg-accent text-white flex items-center justify-center">
-                            <Check className="w-2.5 h-2.5" />
-                          </div>
+                        {theme.description && (
+                          <span className="text-[9px] leading-tight" style={{ color: theme.colors['text-muted'] }}>
+                            {theme.description}
+                          </span>
                         )}
+                        {/* Color swatches */}
+                        <div className="flex gap-1 mt-auto">
+                          <span className="w-4 h-4 rounded-full border-2" style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors.border }} />
+                          <span className="w-4 h-4 rounded-full border-2" style={{ backgroundColor: theme.colors.accent, borderColor: theme.colors.border }} />
+                          <span className="w-4 h-4 rounded-full border-2" style={{ backgroundColor: theme.colors['text-muted'], borderColor: theme.colors.border }} />
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Claros */}
+                <p className="text-[10px] text-text-muted uppercase tracking-widest font-bold mt-3">— Claros</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {Object.entries(themes).filter(([, t]) => {
+                    const bg = t.colors.bg
+                    return ['#F8', '#FA', '#F5'].some(p => bg.toUpperCase().startsWith(p))
+                  }).map(([key, theme]) => {
+                    const isSelected = currentTheme === key
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => handleSelectTheme(key)}
+                        className={`
+                          p-3 rounded-xl border text-left cursor-pointer transition-all flex flex-col gap-2 group relative overflow-hidden
+                          ${isSelected
+                            ? 'border-accent ring-1 ring-accent shadow-md'
+                            : 'border-border hover:border-gray-300 hover:shadow-sm'
+                          }
+                        `}
+                        style={{ backgroundColor: theme.colors.bg }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.colors.accent }} />
+                          {isSelected && (
+                            <div className="w-4 h-4 rounded-full bg-accent text-white flex items-center justify-center shrink-0">
+                              <Check className="w-2.5 h-2.5" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-bold truncate w-full" style={{ color: theme.colors.text }}>
+                          {theme.name}
+                        </span>
+                        {theme.description && (
+                          <span className="text-[9px] leading-tight" style={{ color: theme.colors['text-muted'] }}>
+                            {theme.description}
+                          </span>
+                        )}
+                        <div className="flex gap-1 mt-auto">
+                          <span className="w-4 h-4 rounded-full border-2" style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors.border }} />
+                          <span className="w-4 h-4 rounded-full border-2" style={{ backgroundColor: theme.colors.accent, borderColor: theme.colors.border }} />
+                          <span className="w-4 h-4 rounded-full border-2" style={{ backgroundColor: theme.colors['text-muted'], borderColor: theme.colors.border }} />
+                        </div>
                       </button>
                     )
                   })}

@@ -3,8 +3,8 @@ import {
   Calendar, 
   User, 
   Clock, 
+  Search,
   FileSpreadsheet, 
-  Search, 
   ArrowDown, 
   ArrowUp, 
   ArrowRightLeft, 
@@ -410,6 +410,9 @@ export default function HistorialView({ historial = [], activeSessions = [], use
   const [fechaFiltro, setFechaFiltro] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [activeTx, setActiveTx] = useState(null)
+  
+  const unitSystem = localStorage.getItem('unitSystem') || 'kg'
+  const isTN = unitSystem === 't'
 
   if (isLoading) {
     return (
@@ -529,31 +532,35 @@ export default function HistorialView({ historial = [], activeSessions = [], use
         </div>
       </div>
 
-      {/* 2. PANEL DE FILTROS AVANZADOS (UX Buscador Select + Custom Datepicker) */}
+      {/* 2. PANEL DE FILTROS AVANZADOS */}
       <div className="bg-surface border border-border rounded-2xl p-4 space-y-4 shadow-xs">
         <div className="flex flex-col md:flex-row gap-3">
           
-          {/* Campo de búsqueda */}
-          <div className="flex-1 relative">
-            <input 
-              type="text" 
-              placeholder="Buscar por nro de guía, responsable, chofer, destino..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="w-full bg-bg border border-border text-foreground placeholder:text-text-muted/40 rounded-xl py-2 px-3 pl-9 text-xs outline-none focus:border-accent transition-colors h-[34px] font-medium"
-            />
-            <Search className="w-4 h-4 text-text-muted/50 absolute left-3 top-1/2 -translate-y-1/2" />
-            {busqueda && (
-              <button 
-                onClick={() => setBusqueda('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-foreground cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+          {/* Search bar & Export */}
+          <div className="flex items-center gap-3 w-full">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input 
+                type="text" 
+                placeholder="Buscar fleje, guía, empresa, chofer..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="w-full bg-bg border border-border focus:border-accent focus:ring-1 focus:ring-accent text-foreground rounded-2xl py-2.5 pl-10 pr-4 text-xs outline-none transition-all shadow-xs"
+              />
+            </div>
+            <button
+              onClick={() => {
+                import('../lib/reportUtils').then(({ exportarHistorialExcel }) => {
+                  exportarHistorialExcel(historial, isTN)
+                })
+              }}
+              title="Exportar a Excel"
+              className="bg-accent hover:bg-accent-hover text-white p-2.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex shrink-0 items-center justify-center"
+            >
+              <FileSpreadsheet className="w-5 h-5" />
+            </button>
           </div>
 
-          {/* Selector de Torres Personalizado con Filtro Buscador */}
           <SearchableSelect 
             options={uniqueTowers}
             value={filtroTorre}
@@ -562,7 +569,6 @@ export default function HistorialView({ historial = [], activeSessions = [], use
             icon={SlidersHorizontal}
           />
 
-          {/* Datepicker Personalizado e Independiente */}
           <CustomDatePicker 
             value={fechaFiltro}
             onChange={setFechaFiltro}
@@ -599,7 +605,7 @@ export default function HistorialView({ historial = [], activeSessions = [], use
         </div>
       </div>
 
-      {/* 2.5 OPERACIONES EN CURSO (Tiempo Real) */}
+      {/* 2.5 OPERACIONES EN CURSO */}
       {(() => {
         const visibleActiveSessions = userProfile?.rol === 'Administrador'
           ? activeSessions

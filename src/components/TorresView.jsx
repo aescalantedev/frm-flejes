@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { ArrowUp, ArrowDown, Edit3, Trash2 } from 'lucide-react'
+import { ArrowUp, ArrowDown, Edit3, Trash2, FileSpreadsheet } from 'lucide-react'
+import { exportarTorresExcel } from '../lib/reportUtils'
 
 export default function TorresView({ 
   torres, 
@@ -12,6 +13,8 @@ export default function TorresView({
   onMoverTorre 
 }) {
   const [filtroEstado, setFiltroEstado] = useState('todas')
+  const unitSystem = localStorage.getItem('unitSystem') || 'kg'
+  const isTN = unitSystem === 't'
 
   // RENDER SKELETON LOADER
   if (isLoading) {
@@ -80,11 +83,21 @@ export default function TorresView({
       {/* Cabecera del Listado */}
       <div className="flex items-center justify-between">
         <h2 className="text-base font-bold text-foreground">Listado de Torres</h2>
-        <span className="text-xs text-text-muted font-medium font-mono">
-          {searchQuery || filtroEstado !== 'todas' 
-            ? `${filteredTorres.length} de ` 
-            : ''}{torres.length} torres
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-text-muted font-medium font-mono">
+            {searchQuery || filtroEstado !== 'todas' 
+              ? `${filteredTorres.length} de ` 
+              : ''}{torres.length} torres
+          </span>
+          <button
+            onClick={() => exportarTorresExcel(torres, inventario, isTN)}
+            title="Exportar Torres a Excel"
+            className="bg-accent hover:bg-accent-hover text-white px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Excel</span>
+          </button>
+        </div>
       </div>
 
       {/* Filtros Rápidos en Chips (M3) */}

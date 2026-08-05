@@ -7,6 +7,12 @@
       "skillPath": "echarts/SKILL.md",
       "computedHash": "c6f13fbab749480317f198054d8cbb7547209aa943165242b074e330006e96a4"
     },
+    "exceljs": {
+      "source": "aidotnet/moyucode",
+      "sourceType": "github",
+      "skillPath": "skills/tools/exceljs/SKILL.md",
+      "computedHash": "6a93a55db59104af6342605007d20dd24a6034e1d153767571b005f051395b22"
+    },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",
