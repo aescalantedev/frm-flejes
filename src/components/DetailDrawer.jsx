@@ -1,6 +1,21 @@
 import React, { useState } from 'react'
 import { X, Plus, Trash2, ArrowRightLeft, Percent, Scale, Check, AlertTriangle, Edit3 } from 'lucide-react'
 
+// Utilidad para normalizar medidas ("284 X 2.0" -> "284X2") y asegurar que coincida con la DB
+const normalizeMedida = (m) => {
+  if (!m) return ''
+  const s = m.replace(/\s+/g, '').toUpperCase()
+  const parts = s.split('X')
+  if (parts.length === 2) {
+    const w = parseFloat(parts[0])
+    const h = parseFloat(parts[1])
+    if (!isNaN(w) && !isNaN(h)) {
+      return `${w}X${h}`
+    }
+  }
+  return s
+}
+
 export default function DetailDrawer({ 
   torreId, 
   torres, 
@@ -10,7 +25,9 @@ export default function DetailDrawer({
   onEliminarFleje,
   onEditarFleje,
   onEliminarVariosFlejes,
-  onAbrirTraslado 
+  onAbrirTraslado,
+  catalogoCostos = [],
+  userProfile 
 }) {
   // Estado del menú de opciones de fleje activo (Bottom Sheet / Dialog)
   const [activeFlejeMenu, setActiveFlejeMenu] = useState(null) // { id, num, peso }
@@ -284,6 +301,14 @@ export default function DetailDrawer({
                 {flejes.map((fleje, idx) => {
                   const isSelected = selectedFlejeIds.includes(fleje.id)
                   const num = idx + 1
+                  
+                  const medidaToUse = fleje.medida || torre.nombre_medida
+                  let costoFleje = 0
+                  if (medidaToUse) {
+                    const normalized = normalizeMedida(medidaToUse)
+                    const catItem = catalogoCostos.find(c => c.medida === normalized)
+                    if (catItem) costoFleje = fleje.peso * parseFloat(catItem.costo_kg)
+                  }
 
                   return (
                     <div 
@@ -310,9 +335,15 @@ export default function DetailDrawer({
                       )}
 
                       <span className="text-[10px] text-text-muted font-medium">Fleje #{num}</span>
-                      <span className="text-base font-bold text-accent font-mono mt-0.5">{fleje.peso.toFixed(2)}</span>
-                      <span className="text-[10px] text-text-muted font-mono mb-1.5">kg</span>
-                      <span className="text-[9px] text-text-muted font-mono bg-bg/50 px-1.5 py-0.5 rounded border border-border/30 truncate max-w-[90%] font-bold uppercase">
+                      <span className="text-xs font-black text-accent mt-0.5 font-mono">{fleje.peso.toFixed(2)} kg</span>
+                      
+                      {userProfile?.rol === 'Administrador' && costoFleje > 0 && (
+                        <span className="text-[9px] text-text-muted/80 mt-1 font-bold animate-fadeIn">
+                          S/ {costoFleje.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </span>
+                      )}
+
+                      <span className="text-[9px] text-text-muted font-mono bg-bg/50 px-1.5 py-0.5 mt-1 rounded border border-border/30 truncate max-w-[90%] font-bold uppercase">
                         {fleje.medida || torre.nombre_medida}
                       </span>
                     </div>

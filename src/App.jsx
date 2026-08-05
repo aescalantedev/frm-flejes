@@ -312,6 +312,24 @@ function App() {
     }
   })
 
+  // 1.5 Fetch Catalogo Costos
+  const { 
+    data: catalogoCostos = [],
+  } = useQuery({
+    queryKey: ['catalogo_costos'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('catalogo_costos')
+          .select('*')
+        if (error) throw error
+        return data || []
+      } catch (e) {
+        return []
+      }
+    }
+  })
+
   // 2. Fetch Historial of movements
   const { 
     data: historial = [], 
@@ -1015,6 +1033,8 @@ function App() {
               onToggleSelectFleje={handleToggleSelectFleje}
               dispatchCart={dispatchSession?.items || []}
               showToast={showToast}
+              catalogoCostos={catalogoCostos}
+              userProfile={userProfile}
             />
           )}
 
@@ -1099,6 +1119,8 @@ function App() {
           onEditarFleje={handleEditarFleje}
           onEliminarVariosFlejes={handleEliminarVariosFlejes}
           onAbrirTraslado={() => setTrasladoOpen(true)}
+          catalogoCostos={catalogoCostos}
+          userProfile={userProfile}
         />
       )}
 

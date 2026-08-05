@@ -1,6 +1,21 @@
 import React, { useState } from 'react'
 import { Plus, Truck, Send, Check } from 'lucide-react'
 
+// Utilidad para normalizar medidas ("284 X 2.0" -> "284X2") y asegurar que coincida con la DB
+const normalizeMedida = (m) => {
+  if (!m) return ''
+  const s = m.replace(/\s+/g, '').toUpperCase()
+  const parts = s.split('X')
+  if (parts.length === 2) {
+    const w = parseFloat(parts[0])
+    const h = parseFloat(parts[1])
+    if (!isNaN(w) && !isNaN(h)) {
+      return `${w}X${h}`
+    }
+  }
+  return s
+}
+
 export default function PanoramaView({ 
   torres, 
   inventario, 
@@ -15,7 +30,9 @@ export default function PanoramaView({
   onOpenBatchIngreso,
   onToggleSelectFleje,
   dispatchCart = [],
-  showToast
+  showToast,
+  catalogoCostos = [],
+  userProfile
 }) {
   const [filtroEstado, setFiltroEstado] = useState('todas')
 
@@ -107,7 +124,21 @@ export default function PanoramaView({
   const torresData = filteredTorres.map(torre => {
     const flejes = inventario[torre.id] || []
     const cantidadActual = flejes.length
-    const pesoTorre = flejes.reduce((sum, f) => sum + f.peso, 0)
+    let pesoTorre = 0
+    let costoTotalTorre = 0
+    
+    flejes.forEach(f => {
+      pesoTorre += f.peso
+      const medidaToUse = f.medida || torre.nombre_medida
+      if (medidaToUse) {
+        const normalized = normalizeMedida(medidaToUse)
+        const catItem = catalogoCostos.find(c => c.medida === normalized)
+        if (catItem) {
+          costoTotalTorre += (f.peso * parseFloat(catItem.costo_kg))
+        }
+      }
+    })
+
     const capMax = torre.cantidad_maxima
     const porcentaje = capMax > 0 ? (cantidadActual / capMax) * 100 : 0
     
@@ -132,6 +163,7 @@ export default function PanoramaView({
       cantidadActual,
       capMax,
       pesoTorre,
+      costoTotalTorre,
       porcentaje,
       statusText,
       statusClass
@@ -241,7 +273,7 @@ export default function PanoramaView({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {torresData.map(({ torre, flejes, cantidadActual, capMax, pesoTorre, porcentaje, statusText, statusClass }) => {
+          {torresData.map(({ torre, flejes, cantidadActual, capMax, pesoTorre, costoTotalTorre, porcentaje, statusText, statusClass }) => {
             
             const isEmpty = cantidadActual === 0
             const isFull = cantidadActual >= capMax
@@ -527,6 +559,12 @@ export default function PanoramaView({
                   <span className="text-xs text-text-muted">Total Peso:</span>
                   <span className="text-sm font-bold text-warning font-mono">{pesoTorre.toFixed(2)} kg</span>
                 </div>
+                {userProfile?.rol === 'Administrador' && (
+                  <div className="flex justify-between items-center pt-1.5 animate-fadeIn">
+                    <span className="text-[10px] text-text-muted font-bold tracking-wide uppercase">Valorizado:</span>
+                    <span className="text-xs font-bold text-accent font-mono">S/ {costoTotalTorre.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                  </div>
+                )}
               </div>
             )
           })}

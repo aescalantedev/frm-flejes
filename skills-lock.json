@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "echarts": {
+      "source": "eng0ai/eng0-template-skills",
+      "sourceType": "github",
+      "skillPath": "echarts/SKILL.md",
+      "computedHash": "c6f13fbab749480317f198054d8cbb7547209aa943165242b074e330006e96a4"
+    },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",
