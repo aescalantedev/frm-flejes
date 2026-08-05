@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Plus, Truck, Send, Check } from 'lucide-react'
 
 // Utilidad para normalizar medidas ("284 X 2.0" -> "284X2") y asegurar que coincida con la DB
@@ -35,6 +35,22 @@ export default function PanoramaView({
   userProfile
 }) {
   const [filtroEstado, setFiltroEstado] = useState('todas')
+
+  // Observer para mostrar FABs solo al hacer scroll
+  const topButtonsRef = useRef(null)
+  const [showFABs, setShowFABs] = useState(false)
+
+  useEffect(() => {
+    if (!topButtonsRef.current) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowFABs(!entry.isIntersecting)
+      },
+      { threshold: 0 }
+    )
+    observer.observe(topButtonsRef.current)
+    return () => observer.disconnect()
+  }, [])
 
   const receptionActive = !!receptionSession
   const dispatchActive = !!dispatchSession
@@ -170,13 +186,17 @@ export default function PanoramaView({
     }
   })
 
-  const pesoTotalToneladas = pesoTotalAcumulado / 1000
+  const unitSystem = localStorage.getItem('unitSystem') || 'kg'
+  const isTN = unitSystem === 't'
+  
+  const displayTotalPeso = isTN ? (pesoTotalAcumulado / 1000).toFixed(3) : pesoTotalAcumulado.toFixed(2)
+  const displayTotalPesoLabel = isTN ? 't' : 'kg'
   const capacidadPromedio = totalTorres > 0 ? (sumaPorcentajes / totalTorres).toFixed(0) : 0
 
   const statCards = [
     { label: 'Torres Filtradas', value: totalTorres, color: 'text-accent' },
     { label: 'Total Flejes', value: totalFlejes, color: 'text-accent' },
-    { label: 'Peso Filtrado', value: `${pesoTotalToneladas.toFixed(3)} t`, color: 'text-warning' },
+    { label: 'Peso Filtrado', value: `${displayTotalPeso} ${displayTotalPesoLabel}`, color: 'text-warning' },
     { label: 'Capacidad Promedio', value: `${capacidadPromedio}%`, color: 'text-info' }
   ]
 
@@ -195,7 +215,7 @@ export default function PanoramaView({
 
       {/* Operaciones Rápidas de Almacén (Solo visibles si no hay sesión activa y no está cargando) */}
       {!receptionActive && !dispatchActive && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-2 animate-fadeIn">
+        <div ref={topButtonsRef} className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-2 animate-fadeIn">
           <button 
             onClick={onStartReception}
             className="bg-accent/5 border border-accent/25 hover:border-accent/40 hover:bg-accent/10 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all active:scale-98 shadow-xs text-left group min-h-[72px]"
@@ -338,7 +358,7 @@ export default function PanoramaView({
                   >
                     <span className={`text-[9px] font-semibold font-mono ${isSelected ? 'text-white/80' : 'text-text-muted'}`}>#{itemIndex + 1}</span>
                     <div className="flex items-center gap-1.5 overflow-hidden">
-                      <span className="text-xs font-bold font-mono truncate">{fleje.peso.toFixed(2)} kg</span>
+                      <span className="text-xs font-bold font-mono truncate">{isTN ? (fleje.peso / 1000).toFixed(3) : fleje.peso.toFixed(2)}</span>
                       {showDiffMeasure && (
                         <span 
                           title={`Medida diferente: ${fleje.medida}`}
@@ -355,7 +375,7 @@ export default function PanoramaView({
                     {isSelected ? (
                       <Check className="w-3.5 h-3.5 text-white animate-scaleUp shrink-0" />
                     ) : (
-                      <span className="text-[9px] text-text-muted font-mono shrink-0">kg</span>
+                      <span className="text-[9px] text-text-muted font-mono shrink-0">{isTN ? 't' : 'kg'}</span>
                     )}
                   </div>
                 )
@@ -525,8 +545,8 @@ export default function PanoramaView({
                         {/* Base de la torre */}
                         <path d="M12 174 L48 174 L43 167 L17 167 Z" fill="var(--color-border)" />
                         
-                        {/* Husillo vertical central */}
-                        <rect x="27" y="15" width="6" height="152" rx="2" fill={`url(#postGrad-${torre.id})`} />
+                        {/* Husillo vertical central (oculto a pedido del usuario) */}
+                        {/* <rect x="27" y="15" width="6" height="152" rx="2" fill={`url(#postGrad-${torre.id})`} /> */}
 
                         {/* Stacking Coils */}
                         {svgCoils}
@@ -557,7 +577,7 @@ export default function PanoramaView({
                 {/* Pie de tarjeta con sumatoria de pesos */}
                 <div className="flex justify-between items-center pt-3 border-t border-border mt-auto">
                   <span className="text-xs text-text-muted">Total Peso:</span>
-                  <span className="text-sm font-bold text-warning font-mono">{pesoTorre.toFixed(2)} kg</span>
+                  <span className="text-sm font-bold text-warning font-mono">{isTN ? (pesoTorre / 1000).toFixed(3) : pesoTorre.toFixed(2)} {isTN ? 't' : 'kg'}</span>
                 </div>
                 {userProfile?.rol === 'Administrador' && (
                   <div className="flex justify-between items-center pt-1.5 animate-fadeIn">
@@ -571,6 +591,28 @@ export default function PanoramaView({
         </div>
       )}
       
+      {/* ==================== FLOATING ACTION BUTTONS (FAB) ==================== */}
+      {showFABs && !receptionActive && !dispatchActive && (
+        <div className="fixed bottom-24 right-6 md:bottom-8 md:right-8 z-40 flex flex-col gap-4 animate-slideUp">
+          {/* Dispatch FAB */}
+          <button 
+            onClick={onStartDispatch}
+            title="Despacho de Material"
+            className="w-14 h-14 bg-warning hover:bg-warning-hover text-white rounded-2xl shadow-xl flex items-center justify-center cursor-pointer transition-all hover:scale-105 active:scale-95 border border-warning/50"
+          >
+            <Send className="w-6 h-6" />
+          </button>
+          
+          {/* Reception FAB */}
+          <button 
+            onClick={onStartReception}
+            title="Recepción de Camión"
+            className="w-14 h-14 bg-accent hover:bg-accent-hover text-white rounded-2xl shadow-xl flex items-center justify-center cursor-pointer transition-all hover:scale-105 active:scale-95 border border-accent/50"
+          >
+            <Truck className="w-6 h-6" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

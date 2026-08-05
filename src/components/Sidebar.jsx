@@ -9,7 +9,8 @@ import {
   LogOut, 
   User,
   Truck,
-  Users
+  Users,
+  LineChart
 } from 'lucide-react'
 
 export default function Sidebar({ 
@@ -39,6 +40,7 @@ export default function Sidebar({
       category: 'Almacén',
       items: [
         { id: 'panorama', label: 'Panorama', icon: LayoutDashboard },
+        userProfile?.rol === 'Administrador' && { id: 'analisis', label: 'Análisis', icon: LineChart },
         userProfile?.rol === 'Administrador' && { id: 'torres', label: 'Torres', icon: Layers },
         { id: 'historial', label: 'Historial', icon: History }
       ].filter(Boolean)

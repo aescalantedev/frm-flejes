@@ -10,7 +10,8 @@ import {
   Info,
   AlertTriangle,
   Clock,
-  Truck
+  Truck,
+  LineChart
 } from 'lucide-react'
 import { applyTheme } from './lib/theme'
 
@@ -23,6 +24,7 @@ import HistorialView from './components/HistorialView'
 import ConfigView from './components/ConfigView'
 import TransportView from './components/TransportView'
 import UsersView from './components/UsersView'
+import AnalisisView from './components/AnalisisView'
 import LoginScreen from './components/LoginScreen'
 import DetailDrawer from './components/DetailDrawer'
 import TrasladoModal from './components/TrasladoModal'
@@ -914,6 +916,7 @@ function App() {
   // Mobile Bottom Nav items list
   const bottomNavItems = [
     { id: 'panorama', label: 'Panorama', icon: LayoutDashboard },
+    userProfile?.rol === 'Administrador' && { id: 'analisis', label: 'Análisis', icon: LineChart },
     userProfile?.rol === 'Administrador' && { id: 'torres', label: 'Torres', icon: Layers },
     { id: 'historial', label: 'Historial', icon: History },
     { id: 'transport', label: 'Transporte', icon: Truck }
@@ -1057,6 +1060,16 @@ function App() {
               activeSessions={activeSessions}
               userProfile={userProfile}
               isLoading={loadingHistorial}
+            />
+          )}
+
+          {seccionActual === 'analisis' && (
+            <AnalisisView 
+              torres={torres}
+              inventario={inventarioMap}
+              historial={historial}
+              catalogoCostos={catalogoCostos}
+              userProfile={userProfile}
             />
           )}
 
