@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from "react"
+import React, { useMemo, useState, useRef } from "react"
 import ReactECharts from "echarts-for-react"
 import {
   Scale, Package, CircleDollarSign, FileSpreadsheet,
   Search, X, ChevronUp, ChevronDown, ChevronsUpDown,
-  BarChart2, TrendingUp, Filter, SlidersHorizontal
+  BarChart2, TrendingUp, Filter, SlidersHorizontal, Download
 } from "lucide-react"
-import { exportarInventarioExcel } from "../lib/reportUtils"
+import { exportarInventarioExcel, exportarAnalisisExcel } from "../lib/reportUtils"
 
 const normalizeMedida = (m) => {
   if (!m) return ""
@@ -40,6 +40,13 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
   const [busquedaInv, setBusquedaInv] = useState("")
   const [filtroMedida, setFiltroMedida] = useState("todas")
   const [sortConfig, setSortConfig] = useState({ key: "torre", dir: "asc" })
+  const [exportandoAnalisis, setExportandoAnalisis] = useState(false)
+
+  // Refs para capturar los gráficos como PNG
+  const refMovimientos = useRef(null)
+  const refPesoTorres  = useRef(null)
+  const refCapacidad   = useRef(null)
+  const refValorizacion = useRef(null)
 
   const medidasUnicas = useMemo(() => {
     const set = new Set()
@@ -221,6 +228,29 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
     { id: "inventario", label: "Inventario", icon: Package },
   ]
 
+  // ── Handler de exportación del dashboard ─────────────────────────────────
+  const handleExportarAnalisis = async () => {
+    setExportandoAnalisis(true)
+    try {
+      await exportarAnalisisExcel({
+        totalPeso,
+        capacidadOcupada,
+        capacidadTotal,
+        valorizacionTotal,
+        torres,
+        inventario,
+        catalogoCostos,
+        historial,
+        periodoMovimientos,
+        topNTorres,
+        isTN,
+        userProfile,
+      })
+    } finally {
+      setExportandoAnalisis(false)
+    }
+  }
+
   return (
     <div className="space-y-5 pb-20 animate-fadeIn">
       <div className="flex justify-between items-start">
@@ -228,6 +258,15 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
           <h1 className="text-2xl font-black text-foreground tracking-tight">Análisis y Estadísticas</h1>
           <p className="text-sm text-text-muted mt-1">Métricas en tiempo real · {capacidadOcupada} de {capacidadTotal} posiciones</p>
         </div>
+        <button
+          onClick={handleExportarAnalisis}
+          disabled={exportandoAnalisis}
+          title="Exportar dashboard completo con gráficos a Excel"
+          className="bg-accent hover:bg-accent-hover disabled:opacity-60 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all active:scale-95 cursor-pointer shadow-sm shrink-0 ml-4"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">{exportandoAnalisis ? 'Generando...' : 'Exportar Dashboard'}</span>
+        </button>
       </div>
 
       {/* KPIs */}
@@ -300,7 +339,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                 ))}
               </div>
             </div>
-            <ReactECharts option={chartMovimientos} style={{ height: "280px", width: "100%" }} />
+            <ReactECharts ref={refMovimientos} option={chartMovimientos} style={{ height: "280px", width: "100%" }} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -316,11 +355,11 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                   ))}
                 </div>
               </div>
-              <ReactECharts option={chartPesoTorres} style={{ height: "300px", width: "100%" }} />
+              <ReactECharts ref={refPesoTorres} option={chartPesoTorres} style={{ height: "300px", width: "100%" }} />
             </div>
             <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs">
               <h3 className="text-sm font-bold text-foreground mb-2">Capacidad del Almacén</h3>
-              <ReactECharts option={chartCapacidad} style={{ height: "300px", width: "100%" }} />
+              <ReactECharts ref={refCapacidad} option={chartCapacidad} style={{ height: "300px", width: "100%" }} />
             </div>
           </div>
 
@@ -328,7 +367,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
             {chartValorizacion ? (
               <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs">
                 <h3 className="text-sm font-bold text-foreground mb-2">Valorización por Medida</h3>
-                <ReactECharts option={chartValorizacion} style={{ height: "320px", width: "100%" }} />
+                <ReactECharts ref={refValorizacion} option={chartValorizacion} style={{ height: "320px", width: "100%" }} />
               </div>
             ) : (
               <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs flex items-center justify-center opacity-50">

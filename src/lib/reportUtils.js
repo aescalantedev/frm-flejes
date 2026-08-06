@@ -382,3 +382,425 @@ export const exportarTorresExcel = async (torres, inventarioMap, isTN) => {
   const dateStr = format(new Date(), 'yyyy-MM-dd_HH-mm')
   saveAs(blob, `Torres_Inventario_${dateStr}.xlsx`)
 }
+
+/**
+ * Exporta la vista de Análisis con gráficos NATIVOS de Excel.
+ * Estructura:
+ *   Hoja 1 "Dashboard"  → KPIs + 4 gráficos nativos en layout 2×2
+ *   Hoja 2 "Inventario" → tabla completa fleje a fleje
+ *   Hoja 3 "Datos"      → datos de referencia para los gráficos (oculta)
+ */
+export const exportarAnalisisExcel = async ({
+  totalPeso,
+  capacidadOcupada,
+  capacidadTotal,
+  valorizacionTotal,
+  torres,
+  inventario,
+  catalogoCostos,
+  historial = [],
+  periodoMovimientos = 30,
+  topNTorres = 10,
+  isTN,
+  userProfile,
+}) => {
+  // Importaciones dinámicas (evitan build circular)
+  const JSZip = (await import('jszip')).default
+  const {
+    barChartXml,
+    lineChartXml,
+    doughnutChartXml,
+    pieChartXml,
+    drawingXml,
+    drawingRelsXml,
+    chartRelsXml,
+  } = await import('./nativeCharts.js')
+
+  const unit    = isTN ? 't' : 'kg'
+  const isAdmin = userProfile?.rol === 'Administrador'
+  const DATA_SHEET = 'Datos'   // nombre de la hoja de datos
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 1. CALCULAR DATOS PARA CADA GRÁFICO
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Peso por Torre (bar chart) ────────────────────────────────────────────
+  const pesoPorTorre = torres
+    .map(t => {
+      const peso = (inventario[t.id] || []).reduce((s, f) => s + f.peso, 0)
+      return { name: t.posicion || 'N/A', peso }
+    })
+    .filter(t => t.peso > 0)
+    .sort((a, b) => b.peso - a.peso)
+    .slice(0, topNTorres)
+
+  // ── Tendencia de Movimientos (line chart) ─────────────────────────────────
+  const limitDate = new Date()
+  limitDate.setDate(limitDate.getDate() - periodoMovimientos)
+  const movMap = {}
+  historial.forEach(h => {
+    const d = new Date(h.created_at)
+    if (d < limitDate) return
+    const ds = d.toISOString().split('T')[0]
+    if (!movMap[ds]) movMap[ds] = { ingresos: 0, salidas: 0 }
+    const motivo = (h.motivo || '').toLowerCase()
+    const peso = h.peso_fleje || 0
+    if (motivo.includes('ingreso') || h.recepcion_id) movMap[ds].ingresos += peso
+    else if (h.despacho_id || motivo.includes('despacho') || motivo.includes('salida')) movMap[ds].salidas += peso
+  })
+  const movDates   = Object.keys(movMap).sort()
+  const movIngr    = movDates.map(d => parseFloat((movMap[d].ingresos / (isTN ? 1000 : 1)).toFixed(2)))
+  const movSal     = movDates.map(d => parseFloat((movMap[d].salidas  / (isTN ? 1000 : 1)).toFixed(2)))
+
+  // ── Capacidad (donut chart) ───────────────────────────────────────────────
+  const capData = [
+    { name: `Ocupado (${capacidadOcupada})`, val: capacidadOcupada },
+    { name: `Libre (${capacidadTotal - capacidadOcupada})`, val: Math.max(0, capacidadTotal - capacidadOcupada) },
+  ]
+
+  // ── Valorización por Medida (pie chart — admin only) ───────────────────────
+  // normalizeMedida ya está definida a nivel de módulo — la reutilizamos directamente
+  const valMap = {}
+  if (isAdmin) {
+    torres.forEach(t => {
+      (inventario[t.id] || []).forEach(f => {
+        const m = normalizeMedida(f.medida || t.nombre_medida)
+        if (!m) return
+        const cat = catalogoCostos.find(c => c.medida === m)
+        if (cat) valMap[m] = (valMap[m] || 0) + f.peso * parseFloat(cat.costo_kg)
+      })
+    })
+  }
+  let valData = Object.keys(valMap)
+    .map(m => ({ name: m, val: parseFloat(valMap[m].toFixed(2)) }))
+    .filter(d => d.val > 0)
+    .sort((a, b) => b.val - a.val)
+  if (valData.length > 8) valData = [
+    ...valData.slice(0, 8),
+    { name: 'Otros', val: parseFloat(valData.slice(8).reduce((s, d) => s + d.val, 0).toFixed(2)) },
+  ]
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 2. CREAR EL LIBRO CON EXCELJS (sin gráficos todavía)
+  // ─────────────────────────────────────────────────────────────────────────
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'Sistema de Flejes'
+  workbook.created = new Date()
+
+  // ── Hoja 1: Dashboard (KPIs) ──────────────────────────────────────────────
+  const dash = workbook.addWorksheet('Dashboard')
+
+  dash.mergeCells('A1:L1')
+  Object.assign(dash.getCell('A1'), {
+    value: 'ANÁLISIS Y ESTADÍSTICAS — SISTEMA DE FLEJES',
+    font: { name: 'Calibri', size: 16, bold: true, color: { argb: 'FFFFFFFF' } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } },
+    alignment: { horizontal: 'center', vertical: 'middle' },
+  })
+  dash.getRow(1).height = 34
+
+  dash.mergeCells('A2:L2')
+  Object.assign(dash.getCell('A2'), {
+    value: `Generado el ${format(new Date(), 'dd/MM/yyyy HH:mm')}  ·  Unidad: ${isTN ? 'Toneladas (t)' : 'Kilogramos (kg)'}`,
+    font: { name: 'Calibri', size: 10, color: { argb: 'FF94A3B8' } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } },
+    alignment: { horizontal: 'center', vertical: 'middle' },
+  })
+  dash.getRow(2).height = 18
+
+  // Fila separadora
+  dash.getRow(3).height = 8
+
+  // KPIs
+  const kpiHeaders = [['KPI', 'Valor', 'Detalle']]
+  kpiHeaders[0].forEach((h, i) => {
+    const cell = dash.getCell(4, i + 1)
+    cell.value = h
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } }
+    cell.alignment = { horizontal: 'center', vertical: 'middle' }
+  })
+  dash.getRow(4).height = 20
+
+  const kpiRows = [
+    ['Peso Total Almacenado', `${isTN ? (totalPeso / 1000).toFixed(2) : totalPeso.toFixed(0)} ${unit}`, 'Suma de todos los flejes en inventario', 'FF10B981'],
+    ['Ocupación General', `${capacidadTotal > 0 ? ((capacidadOcupada / capacidadTotal) * 100).toFixed(1) : '0.0'}%`, `${capacidadOcupada} de ${capacidadTotal} posiciones`, 'FFF59E0B'],
+    ...(isAdmin && valorizacionTotal != null
+      ? [['Valorización Total', `S/ ${valorizacionTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 'Calculado con el catálogo de costos', 'FF6366F1']]
+      : []),
+  ]
+  kpiRows.forEach((row, i) => {
+    const r = dash.getRow(5 + i)
+    r.height = 20
+    ;[row[0], row[1], row[2]].forEach((val, j) => {
+      const c = dash.getCell(5 + i, j + 1)
+      c.value = val
+      c.font = { size: 10, bold: j === 0, color: { argb: j === 1 ? row[3] : 'FFE2E8F0' } }
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 0 ? 'FF1E293B' : 'FF253347' } }
+      c.alignment = { vertical: 'middle', horizontal: j === 1 ? 'center' : 'left' }
+      c.border = { bottom: { style: 'thin', color: { argb: 'FF334155' } } }
+    })
+  })
+
+  // Ajustar anchos col A-C (KPIs) y D-L (espacio para charts)
+  dash.getColumn(1).width = 26
+  dash.getColumn(2).width = 20
+  dash.getColumn(3).width = 46
+  for (let c = 4; c <= 12; c++) dash.getColumn(c).width = 14
+
+  // Filas para los gráficos: reservar espacio visual (rows 9–48)
+  const CHART_TITLE_ROW_1 = 8   // fila título row 1 de charts
+  const CHART_IMG_START_1 = 9   // primera fila imagen
+  const CHART_IMG_END_1   = 28  // última fila imagen
+  const CHART_TITLE_ROW_2 = 30
+  const CHART_IMG_START_2 = 31
+  const CHART_IMG_END_2   = 50
+
+  // Labels de sección para los gráficos
+  const makeChartLabel = (row, col, title) => {
+    dash.getRow(row).height = 18
+    const cell = dash.getCell(row, col)
+    cell.value = title
+    cell.font = { bold: true, size: 10, color: { argb: 'FFCBD5E1' } }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }
+    cell.alignment = { horizontal: 'left', vertical: 'middle' }
+  }
+  makeChartLabel(CHART_TITLE_ROW_1, 1, `Peso por Torre (Top ${topNTorres}) — ${unit}`)
+  makeChartLabel(CHART_TITLE_ROW_1, 7, `Tendencia de Movimientos — últimos ${periodoMovimientos} días`)
+  makeChartLabel(CHART_TITLE_ROW_2, 1, 'Capacidad del Almacén')
+  if (isAdmin) makeChartLabel(CHART_TITLE_ROW_2, 7, 'Valorización por Medida (S/)')
+
+  for (let r = CHART_IMG_START_1; r <= CHART_IMG_END_2; r++) dash.getRow(r).height = 18
+
+  // ── Hoja 2: Inventario ────────────────────────────────────────────────────
+  const inv = workbook.addWorksheet('Inventario')
+  const colsInv = [
+    { header: 'Torre',  key: 'torre',  width: 14 },
+    { header: 'Nivel',  key: 'nivel',  width: 10 },
+    { header: 'Medida', key: 'medida', width: 22 },
+    { header: `Peso (${unit})`, key: 'peso', width: 16 },
+    ...(isAdmin ? [{ header: 'Valorización (S/)', key: 'valor', width: 22 }] : []),
+  ]
+  inv.columns = colsInv
+  styleHeaderRow(inv, colsInv.length)
+  torres.forEach(t => {
+    (inventario[t.id] || []).forEach((f, idx) => {
+      const medida = f.medida || t.nombre_medida || '-'
+      const pesoVal = isTN ? f.peso / 1000 : f.peso
+      let valorVal = null
+      if (isAdmin) {
+        const cat = catalogoCostos.find(c => c.medida === normalizeMedida(medida))
+        if (cat) valorVal = f.peso * parseFloat(cat.costo_kg)
+      }
+      const rowData = { torre: t.posicion, nivel: `#${idx + 1}`, medida, peso: parseFloat(pesoVal.toFixed(2)) }
+      if (isAdmin) rowData.valor = valorVal != null ? parseFloat(valorVal.toFixed(2)) : null
+      const row = inv.addRow(rowData)
+      row.getCell(4).numFmt = '#,##0.00'
+      if (isAdmin) row.getCell(5).numFmt = '"S/" #,##0.00'
+    })
+  })
+  inv.autoFilter = { from: 'A1', to: isAdmin ? 'E1' : 'D1' }
+
+  // ── Hoja 3: Datos de gráficos (oculta) ───────────────────────────────────
+  const datos = workbook.addWorksheet(DATA_SHEET, { state: 'hidden' })
+
+  // Columnas: A-B → peso torre | D-F → movimientos | H-I → capacidad | K-L → valorización
+  // ── Peso por Torre ──────
+  datos.getCell('A1').value = 'Torre'
+  datos.getCell('B1').value = `Peso (${unit})`
+  pesoPorTorre.forEach((d, i) => {
+    datos.getCell(i + 2, 1).value = d.name
+    datos.getCell(i + 2, 2).value = parseFloat((isTN ? d.peso / 1000 : d.peso).toFixed(2))
+  })
+  const torresCount = pesoPorTorre.length
+
+  // ── Movimientos ──────────
+  datos.getCell('D1').value = 'Fecha'
+  datos.getCell('E1').value = `Ingresos (${unit})`
+  datos.getCell('F1').value = `Salidas (${unit})`
+  movDates.forEach((d, i) => {
+    datos.getCell(i + 2, 4).value = d
+    datos.getCell(i + 2, 5).value = movIngr[i]
+    datos.getCell(i + 2, 6).value = movSal[i]
+  })
+  const movCount = movDates.length
+
+  // ── Capacidad ─────────────
+  datos.getCell('H1').value = 'Estado'
+  datos.getCell('I1').value = 'Flejes'
+  capData.forEach((d, i) => {
+    datos.getCell(i + 2, 8).value = d.name
+    datos.getCell(i + 2, 9).value = d.val
+  })
+
+  // ── Valorización ─────────
+  if (isAdmin && valData.length > 0) {
+    datos.getCell('K1').value = 'Medida'
+    datos.getCell('L1').value = 'Valor (S/)'
+    valData.forEach((d, i) => {
+      datos.getCell(i + 2, 11).value = d.name
+      datos.getCell(i + 2, 12).value = d.val
+    })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 3. SERIALIZAR CON EXCELJS → BUFFER → ABRIR CON JSZIP
+  // ─────────────────────────────────────────────────────────────────────────
+  const xlsxBuffer = await workbook.xlsx.writeBuffer()
+  const zip = await JSZip.loadAsync(xlsxBuffer)
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 4. GENERAR XML DE GRÁFICOS Y AÑADIRLOS AL ZIP
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Definición de los 4 charts
+  const chartsToAdd = []
+
+  // Chart 1: Barras — Peso por Torre
+  if (torresCount > 0) {
+    chartsToAdd.push({
+      file: 'chart1.xml',
+      xml: barChartXml({
+        sheet: DATA_SHEET,
+        catRange: `$A$2:$A$${torresCount + 1}`,
+        valRange: `$B$2:$B$${torresCount + 1}`,
+        count: torresCount,
+        color: '10B981',
+      }),
+    })
+  }
+
+  // Chart 2: Líneas — Movimientos
+  if (movCount > 0) {
+    chartsToAdd.push({
+      file: 'chart2.xml',
+      xml: lineChartXml({
+        sheet: DATA_SHEET,
+        catRange: `$D$2:$D$${movCount + 1}`,
+        count: movCount,
+        series: [
+          { name: `Ingresos (${unit})`, nameCell: `$E$1`, range: `$E$2:$E$${movCount + 1}` },
+          { name: `Salidas (${unit})`,  nameCell: `$F$1`, range: `$F$2:$F$${movCount + 1}` },
+        ],
+      }),
+    })
+  }
+
+  // Chart 3: Dona — Capacidad
+  chartsToAdd.push({
+    file: 'chart3.xml',
+    xml: doughnutChartXml({
+      sheet: DATA_SHEET,
+      catRange: '$H$2:$H$3',
+      valRange: '$I$2:$I$3',
+      count: 2,
+    }),
+  })
+
+  // Chart 4: Pie — Valorización (solo admin)
+  if (isAdmin && valData.length > 0) {
+    chartsToAdd.push({
+      file: 'chart4.xml',
+      xml: pieChartXml({
+        sheet: DATA_SHEET,
+        catRange: `$K$2:$K$${valData.length + 1}`,
+        valRange: `$L$2:$L$${valData.length + 1}`,
+        count: valData.length,
+      }),
+    })
+  }
+
+  // Añadir archivos de chart + sus rels al ZIP
+  chartsToAdd.forEach(({ file, xml }) => {
+    zip.file(`xl/charts/${file}`, xml)
+    zip.file(`xl/charts/_rels/${file}.rels`, chartRelsXml())
+  })
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 5. DRAWING XML — posiciona los charts en la hoja Dashboard (sheet1)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Layout 2×2:
+  //   chart1 → cols 0-5, rows 8-28 (izquierda arriba)
+  //   chart2 → cols 6-11, rows 8-28 (derecha arriba)
+  //   chart3 → cols 0-5, rows 30-50 (izquierda abajo)
+  //   chart4 → cols 6-11, rows 30-50 (derecha abajo)
+
+  const drawingCharts = chartsToAdd.map((c, i) => {
+    const col    = (i % 2) * 6           // 0 o 6
+    const rowOff = Math.floor(i / 2)     // 0 o 1
+    const rowStart = rowOff === 0 ? CHART_IMG_START_1 - 1 : CHART_IMG_START_2 - 1
+    const rowEnd   = rowOff === 0 ? CHART_IMG_END_1       : CHART_IMG_END_2
+    return {
+      rId:     `rId${i + 1}`,
+      fromCol: col, fromRow: rowStart,
+      toCol:   col + 6, toRow: rowEnd,
+      id:      i + 2,
+      name:    `Gráfico ${i + 1}`,
+    }
+  })
+
+  zip.file('xl/drawings/drawing1.xml', drawingXml(drawingCharts))
+  zip.file('xl/drawings/_rels/drawing1.xml.rels', drawingRelsXml(
+    chartsToAdd.map((c, i) => ({ rId: `rId${i + 1}`, chartFile: c.file }))
+  ))
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 6. VINCULAR DRAWING A SHEET1 (Dashboard)
+  //    ExcelJS numera sheets como sheet1.xml, sheet2.xml, ...
+  // ─────────────────────────────────────────────────────────────────────────
+  const sheet1Path = 'xl/worksheets/sheet1.xml'
+  let sheet1Xml = await zip.file(sheet1Path)?.async('string') || ''
+  if (!sheet1Xml.includes('<drawing')) {
+    // Insertar <drawing r:id="rId_draw1"/> antes de </worksheet>
+    sheet1Xml = sheet1Xml.replace(
+      '</worksheet>',
+      '<drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId_draw1"/></worksheet>'
+    )
+    zip.file(sheet1Path, sheet1Xml)
+  }
+
+  // Relationships de sheet1 → drawing
+  const sheet1RelsPath = 'xl/worksheets/_rels/sheet1.xml.rels'
+  let sheet1Rels = await zip.file(sheet1RelsPath)?.async('string') || ''
+  const drawingRelEntry = `<Relationship Id="rId_draw1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>`
+  if (!sheet1Rels.includes('drawing1.xml')) {
+    if (sheet1Rels.includes('</Relationships>')) {
+      sheet1Rels = sheet1Rels.replace('</Relationships>', `${drawingRelEntry}</Relationships>`)
+    } else {
+      sheet1Rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  ${drawingRelEntry}
+</Relationships>`
+    }
+    zip.file(sheet1RelsPath, sheet1Rels)
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 7. ACTUALIZAR [Content_Types].xml
+  // ─────────────────────────────────────────────────────────────────────────
+  let ct = await zip.file('[Content_Types].xml')?.async('string') || ''
+
+  const ctChart   = 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml'
+  const ctDrawing = 'application/vnd.openxmlformats-officedocument.drawing+xml'
+
+  // Añadir tipo de dibujo si no existe
+  if (!ct.includes(ctDrawing)) {
+    ct = ct.replace('</Types>', `<Override PartName="/xl/drawings/drawing1.xml" ContentType="${ctDrawing}"/></Types>`)
+  }
+  // Añadir tipo de charts si no existen
+  chartsToAdd.forEach(({ file }) => {
+    const partName = `/xl/charts/${file}`
+    if (!ct.includes(partName)) {
+      ct = ct.replace('</Types>', `<Override PartName="${partName}" ContentType="${ctChart}"/></Types>`)
+    }
+  })
+  zip.file('[Content_Types].xml', ct)
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 8. DESCARGAR
+  // ─────────────────────────────────────────────────────────────────────────
+  const finalBuffer = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' })
+  const blob = new Blob([finalBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const dateStr = format(new Date(), 'yyyy-MM-dd_HH-mm')
+  saveAs(blob, `Analisis_Dashboard_${dateStr}.xlsx`)
+}
