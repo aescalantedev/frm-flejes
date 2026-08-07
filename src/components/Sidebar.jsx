@@ -10,7 +10,8 @@ import {
   User,
   Truck,
   Users,
-  LineChart
+  LineChart,
+  Database
 } from 'lucide-react'
 
 export default function Sidebar({ 
@@ -49,7 +50,8 @@ export default function Sidebar({
       category: 'Administración',
       items: [
         { id: 'transport', label: 'Gestión de Transporte', icon: Truck },
-        userProfile?.rol === 'Administrador' && { id: 'users', label: 'Usuarios y Roles', icon: Users }
+        userProfile?.rol === 'Administrador' && { id: 'users', label: 'Usuarios y Roles', icon: Users },
+        userProfile?.rol === 'Administrador' && { id: 'mantenedor', label: 'Catálogo y Costos', icon: Database }
       ].filter(Boolean)
     },
     {

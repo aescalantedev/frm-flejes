@@ -26,6 +26,7 @@ import TransportView from './components/TransportView'
 import UsersView from './components/UsersView'
 import AnalisisView from './components/AnalisisView'
 import LoginScreen from './components/LoginScreen'
+import MantenedorCostosView from './components/MantenedorCostosView'
 import DetailDrawer from './components/DetailDrawer'
 import TrasladoModal from './components/TrasladoModal'
 import TorreFormModal from './components/TorreFormModal'
@@ -302,15 +303,53 @@ function App() {
     queryKey: ['torres'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('torres')
-        .select('*, inventario(*)')
-        .order('orden', { ascending: true })
-        .order('secuencia', { referencedTable: 'inventario', ascending: true })
+        .from('ubicaciones')
+        .select(`
+          id,
+          codigo_posicion,
+          capacidad_maxima,
+          orden_visual,
+          producto_sugerido_id,
+          catalogo_productos!producto_sugerido_id(medida_corta),
+          flejes (
+            id,
+            ubicacion_id,
+            peso_kg,
+            secuencia,
+            recepcion_id,
+            producto_id,
+            costo_kg_ingreso,
+            catalogo_productos(codigo, glosa, medida_corta)
+          )
+        `)
+        .order('orden_visual', { ascending: true })
+        // Nota: no podemos ordenar tablas anidadas fácilmente sin RPC o views en supabase-js V2 a menos que hagamos sorting en memoria.
       if (error) {
         showToast('Error al cargar torres', true)
         throw error
       }
-      return data || []
+      
+      const mapped = (data || []).map(u => ({
+        id: u.id,
+        posicion: u.codigo_posicion,
+        nombre_medida: u.catalogo_productos?.medida_corta || 'No asignada',
+        cantidad_maxima: u.capacidad_maxima,
+        orden: u.orden_visual,
+        producto_sugerido_id: u.producto_sugerido_id,
+        inventario: (u.flejes || []).sort((a,b) => a.secuencia - b.secuencia).map(f => ({
+          id: f.id,
+          torre_id: f.ubicacion_id,
+          peso: f.peso_kg,
+          medida: f.catalogo_productos?.medida_corta || '',
+          codigo: f.catalogo_productos?.codigo || '',
+          glosa: f.catalogo_productos?.glosa || '',
+          producto_id: f.producto_id,
+          recepcion_id: f.recepcion_id,
+          secuencia: f.secuencia,
+          costo_kg_ingreso: f.costo_kg_ingreso
+        }))
+      }))
+      return mapped
     }
   })
 
@@ -322,10 +361,49 @@ function App() {
     queryFn: async () => {
       try {
         const { data, error } = await supabase
-          .from('catalogo_costos')
-          .select('*')
+          .from('kardex_costos')
+          .select(`
+            id,
+            costo_kg,
+            producto_id,
+            fecha_vigencia,
+            catalogo_productos(codigo, medida_corta, glosa)
+          `)
         if (error) throw error
-        return data || []
+        return (data || []).map(k => ({
+          id: k.id,
+          costo_kg: k.costo_kg,
+          producto_id: k.producto_id,
+          fecha_vigencia: k.fecha_vigencia,
+          medida: k.catalogo_productos?.medida_corta || '',
+          codigo: k.catalogo_productos?.codigo || '',
+          glosa: k.catalogo_productos?.glosa || ''
+        }))
+      } catch (e) {
+        return []
+      }
+    }
+  })
+
+  // 1.6 Fetch Full Catalogo Productos
+  const { 
+    data: catalogoProductos = [],
+  } = useQuery({
+    queryKey: ['catalogo_productos'],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('catalogo_productos')
+          .select('id, codigo, medida_corta, glosa')
+          .order('medida_corta')
+        if (error) throw error
+        return (data || []).map(p => ({
+          id: p.id,
+          producto_id: p.id,
+          medida: p.medida_corta || '',
+          codigo: p.codigo || '',
+          glosa: p.glosa || ''
+        }))
       } catch (e) {
         return []
       }
@@ -341,14 +419,38 @@ function App() {
     queryKey: ['historial'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('historial')
-        .select('*, recepciones(*), despachos(*)')
+        .from('historial_movimientos')
+        .select(`
+          id,
+          ubicacion_id,
+          ubicaciones(codigo_posicion),
+          catalogo_productos(codigo, glosa, medida_corta),
+          peso_kg,
+          costo_kg_aplicado,
+          motivo, usuario, recepcion_id, despacho_id, created_at,
+          recepciones(*), despachos(*)
+        `)
         .order('created_at', { ascending: false })
       if (error) {
         showToast('Error al cargar historial', true)
         throw error
       }
-      return data || []
+      return (data || []).map(h => ({
+         id: h.id,
+         torre_id: h.ubicacion_id,
+         posicion: h.ubicaciones?.codigo_posicion || 'Sin Torre',
+         medida: h.catalogo_productos?.medida_corta || 'Mixto',
+         codigo: h.catalogo_productos?.codigo || '',
+         peso_fleje: h.peso_kg,
+         costo_kg_aplicado: h.costo_kg_aplicado,
+         motivo: h.motivo,
+         usuario: h.usuario,
+         recepcion_id: h.recepcion_id,
+         despacho_id: h.despacho_id,
+         recepciones: h.recepciones,
+         despachos: h.despachos,
+         created_at: h.created_at
+      }))
     }
   })
 
@@ -387,11 +489,10 @@ function App() {
       if (torreData.id) {
         // Edit existing tower
         const { error } = await supabase
-          .from('torres')
+          .from('ubicaciones')
           .update({
-            posicion: torreData.posicion,
-            nombre_medida: torreData.nombre_medida,
-            cantidad_maxima: torreData.cantidad_maxima
+            codigo_posicion: torreData.posicion,
+            capacidad_maxima: torreData.cantidad_maxima
           })
           .eq('id', torreData.id)
 
@@ -400,11 +501,10 @@ function App() {
       } else {
         // Create new tower
         const { error } = await supabase
-          .from('torres')
+          .from('ubicaciones')
           .insert([{
-            posicion: torreData.posicion,
-            nombre_medida: torreData.nombre_medida,
-            cantidad_maxima: torreData.cantidad_maxima
+            codigo_posicion: torreData.posicion,
+            capacidad_maxima: torreData.cantidad_maxima
           }])
 
         if (error) throw error
@@ -436,15 +536,15 @@ function App() {
           // First delete inventory items due to relationship
           if (flejes.length > 0) {
             const { error: eInv } = await supabase
-              .from('inventario')
+              .from('flejes')
               .delete()
-              .eq('torre_id', torre.id)
+              .eq('ubicacion_id', torre.id)
             if (eInv) throw eInv
           }
 
           // Then delete tower
           const { error: eTorre } = await supabase
-            .from('torres')
+            .from('ubicaciones')
             .delete()
             .eq('id', torre.id)
           if (eTorre) throw eTorre
@@ -480,8 +580,8 @@ function App() {
       for (let i = 0; i < localTorres.length; i++) {
         const codPosicion = `P${String(i + 1).padStart(2, '0')}`
         const { error } = await supabase
-          .from('torres')
-          .update({ posicion: codPosicion })
+          .from('ubicaciones')
+          .update({ codigo_posicion: codPosicion, orden_visual: i + 1 })
           .eq('id', localTorres[i].id)
         if (error) throw error
       }
@@ -540,8 +640,9 @@ function App() {
       torreName,
       capMax,
       currentCount,
-      torreMedida: t ? t.nombre_medida : ''
-    })
+      torreMedida: t ? t.nombre_medida : '',
+        torreProductoId: t ? t.producto_sugerido_id : null
+      })
   }
 
   // Confirmar pesos desde BatchIngresoModal
@@ -552,9 +653,12 @@ function App() {
     if (receptionSession) {
       const newItems = weightsList.map(item => ({
         torre_id: torreId,
-        peso: item.peso,
-        medida: item.medida
-      }))
+          peso: item.peso,
+          medida: item.medida,
+          producto_id: item.producto_id,
+          codigo: item.codigo,
+          costo_kg_aplicado: item.costo_kg_aplicado
+        }))
       setReceptionSession(prev => ({
         ...prev,
         items: [...prev.items, ...newItems]
@@ -581,27 +685,31 @@ function App() {
         const recepcionId = recData[0].id
 
         // 2. Insertar en inventario vinculando recepcion_id
+        const currentFlejes = inventarioMap[torreId] || []
+        const baseSec = currentFlejes.length > 0 ? Math.max(...currentFlejes.map(f => f.secuencia || 0)) : 0
+
         const { error: eInv } = await supabase
-          .from('inventario')
-          .insert(weightsList.map(item => ({
-            torre_id: torreId,
-            peso: item.peso,
-            medida: item.medida,
-            recepcion_id: recepcionId
+          .from('flejes')
+          .insert(weightsList.map((item, i) => ({
+            ubicacion_id: torreId,
+            peso_kg: item.peso,
+            producto_id: item.producto_id,
+              costo_kg_ingreso: item.costo_kg_aplicado,
+            recepcion_id: recepcionId,
+            secuencia: baseSec + i + 1
           })))
         if (eInv) throw eInv
 
         // 3. Insertar en historial vinculando recepcion_id
         const { error: eHist } = await supabase
-          .from('historial')
+          .from('historial_movimientos')
           .insert(weightsList.map(item => ({
-            torre_id: torreId,
-            posicion: torreName,
-            medida: item.medida || torres.find(t => t.id === torreId)?.nombre_medida || '',
-            peso_fleje: item.peso,
+            ubicacion_id: torreId,
+            peso_kg: item.peso,
+            producto_id: item.producto_id,
+              costo_kg_aplicado: item.costo_kg_aplicado,
             motivo: 'Ajuste Ingreso',
-            despachador: userProfile.name,
-            hora_inicio: new Date().toISOString(),
+            usuario: userProfile.name,
             recepcion_id: recepcionId
           })))
         if (eHist) throw eHist
@@ -660,29 +768,38 @@ function App() {
         const recepcionId = recData[0].id
 
         // 2. Insertar en Inventario
+        const secTracker = {}
         const { error: eInv } = await supabase
-          .from('inventario')
-          .insert(session.items.map(item => ({
-            torre_id: item.torre_id,
-            peso: item.peso,
-            medida: item.medida || null,
-            recepcion_id: recepcionId
-          })))
+          .from('flejes')
+          .insert(session.items.map(item => {
+            if (secTracker[item.torre_id] === undefined) {
+              const currentF = inventarioMap[item.torre_id] || []
+              secTracker[item.torre_id] = currentF.length > 0 ? Math.max(...currentF.map(f => f.secuencia || 0)) : 0
+            }
+            secTracker[item.torre_id] += 1
+            
+            return {
+              ubicacion_id: item.torre_id,
+              peso_kg: item.peso,
+              producto_id: item.producto_id,
+              costo_kg_ingreso: item.costo_kg_aplicado,
+              recepcion_id: recepcionId,
+              secuencia: secTracker[item.torre_id]
+            }
+          }))
         if (eInv) throw eInv
 
         // 3. Insertar en Historial
         const { error: eHist } = await supabase
-          .from('historial')
+          .from('historial_movimientos')
           .insert(session.items.map(item => {
-            const t = torres.find(x => x.id === item.torre_id)
             return {
-              torre_id: item.torre_id,
-              posicion: t ? t.posicion : 'Al Piso',
-              medida: item.medida || (t ? t.nombre_medida : 'Mixto'),
-              peso_fleje: item.peso,
+              ubicacion_id: item.torre_id,
+              peso_kg: item.peso,
+              producto_id: item.producto_id,
+              costo_kg_aplicado: item.costo_kg_aplicado,
               motivo: 'Ingreso',
-              despachador: userProfile.name,
-              hora_inicio: session.hora_inicio,
+              usuario: userProfile.name,
               recepcion_id: recepcionId
             }
           }))
@@ -713,26 +830,22 @@ function App() {
         // 2. Eliminar del Inventario Activo
         const idsToDelete = session.items.map(item => item.id)
         const { error: eDel } = await supabase
-          .from('inventario')
+          .from('flejes')
           .delete()
           .in('id', idsToDelete)
         if (eDel) throw eDel
 
         // 3. Insertar en Historial
         const { error: eHist } = await supabase
-          .from('historial')
+          .from('historial_movimientos')
           .insert(session.items.map(item => {
-            const t = torres.find(x => x.id === item.torre_id)
             return {
-              torre_id: item.torre_id,
-              posicion: t ? t.posicion : 'Sin Torre',
-              medida: t ? t.nombre_medida : '',
-              peso_fleje: item.peso,
+              ubicacion_id: item.torre_id,
+              peso_kg: item.peso,
+              producto_id: item.producto_id,
               motivo: session.motivo || 'Despacho',
-              despachador: userProfile.name,
-              num_solicitud: session.num_solicitud,
-              hora_inicio: session.hora_inicio,
-              recepcion_id: item.recepcion_id, // Auditoría: de qué recepción provino originalmente
+              usuario: userProfile.name,
+              recepcion_id: item.recepcion_id,
               despacho_id: despachoId
             }
           }))
@@ -754,7 +867,7 @@ function App() {
   const handleEliminarFleje = async (id) => {
     try {
       const { error } = await supabase
-        .from('inventario')
+        .from('flejes')
         .delete()
         .eq('id', id)
 
@@ -768,20 +881,21 @@ function App() {
   }
 
   // Edit Strapping Band (Fleje) weight and/or medida
-  const handleEditarFleje = async (id, nuevoPeso, nuevaMedida) => {
+  const handleEditarFleje = async (id, nuevoPeso, nuevoProductoId, nuevoCosto) => {
     if (isNaN(nuevoPeso) || nuevoPeso <= 0) {
       showToast('El peso debe ser un número positivo', true)
       return false
     }
 
     try {
-      const updateData = { peso: nuevoPeso }
-      if (nuevaMedida !== undefined) {
-        updateData.medida = nuevaMedida || null
+      const updateData = { peso_kg: nuevoPeso }
+      if (nuevoProductoId !== undefined) {
+        updateData.producto_id = nuevoProductoId
+        if (nuevoCosto !== undefined) updateData.costo_kg_ingreso = nuevoCosto
       }
 
       const { error } = await supabase
-        .from('inventario')
+        .from('flejes')
         .update(updateData)
         .eq('id', id)
 
@@ -802,7 +916,7 @@ function App() {
 
     try {
       const { error } = await supabase
-        .from('inventario')
+        .from('flejes')
         .delete()
         .in('id', ids)
 
@@ -850,7 +964,7 @@ function App() {
 
       // 2. Remove strap from active Inventory table
       const { error: eInventario } = await supabase
-        .from('inventario')
+        .from('flejes')
         .delete()
         .eq('id', trasladoData.flejeId)
 
@@ -858,16 +972,13 @@ function App() {
 
       // 3. Insert record into History logs vinculando despacho_id
       const { error: eHistorial } = await supabase
-        .from('historial')
+        .from('historial_movimientos')
         .insert([{
-          torre_id: torreActualId,
-          posicion: targetTorre.posicion,
-          medida: targetTorre.nombre_medida,
-          peso_fleje: targetFleje.peso,
+          ubicacion_id: torreActualId,
+          peso_kg: targetFleje.peso,
+          producto_id: targetFleje.producto_id,
           motivo: trasladoData.motivo,
-          num_solicitud: trasladoData.numSolicitud,
-          despachador: trasladoData.despachador,
-          hora_inicio: trasladoData.horaInicio,
+          usuario: trasladoData.despachador,
           despacho_id: despachoId
         }])
 
@@ -936,7 +1047,7 @@ function App() {
       <>
         <LoginScreen showToast={showToast} />
         {toast && (
-          <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-2xl text-xs font-bold shadow-lg border transition-all animate-fadeIn ${
+          <div className={`fixed bottom-4 right-4 z-[9999] px-4 py-3 rounded-2xl text-xs font-bold shadow-lg border transition-all animate-fadeIn ${
             toast.isError ? 'bg-danger/10 border-danger/20 text-danger animate-pulse' : 'bg-success/10 border-success/20 text-success'
           }`}>
             {toast.message}
@@ -1095,6 +1206,15 @@ function App() {
               showToast={showToast}
             />
           )}
+
+          {seccionActual === 'mantenedor' && (
+            <MantenedorCostosView 
+              catalogoProductos={catalogoProductos}
+              catalogoCostos={catalogoCostos}
+              showToast={showToast}
+              setConfirmConfig={setConfirmConfig}
+            />
+          )}
         </main>
       </div>
 
@@ -1133,6 +1253,7 @@ function App() {
           onEliminarVariosFlejes={handleEliminarVariosFlejes}
           onAbrirTraslado={() => setTrasladoOpen(true)}
           catalogoCostos={catalogoCostos}
+          catalogoProductos={catalogoProductos}
           userProfile={userProfile}
         />
       )}
@@ -1151,17 +1272,18 @@ function App() {
 
       {/* ==================== MODAL: CREAR / EDITAR TORRE ==================== */}
       <TorreFormModal 
-        isOpen={torreFormOpen}
-        onClose={() => setTorreFormOpen(false)}
-        torre={editingTorre}
-        onSave={handleSaveTorre}
-      />
+          isOpen={torreFormOpen}
+          onClose={() => setTorreFormOpen(false)}
+          torre={editingTorre}
+          onSave={handleSaveTorre}
+          catalogoCostos={catalogoCostos}
+        />
 
       {/* ==================== TOAST NOTIFICATION POPUP ==================== */}
       {toast && (
         <div 
           className={`
-            fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl font-semibold text-xs tracking-wide shadow-lg z-50 text-white flex items-center gap-2
+            fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl font-semibold text-xs tracking-wide shadow-lg z-[9999] text-white flex items-center gap-2
             ${toast.isError ? 'bg-danger shadow-danger/25' : 'bg-accent shadow-accent/25'}
           `}
         >
@@ -1270,6 +1392,9 @@ function App() {
           onClose={() => setBatchIngresoConfig(null)}
           torreId={batchIngresoConfig.torreId}
           torreName={batchIngresoConfig.torreName}
+          torreProductoId={batchIngresoConfig.torreProductoId}
+          catalogoProductos={catalogoProductos}
+          catalogoCostos={catalogoCostos}
           capMax={batchIngresoConfig.capMax}
           currentCount={batchIngresoConfig.currentCount}
           onConfirm={handleConfirmBatchIngreso}

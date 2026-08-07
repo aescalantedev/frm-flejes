@@ -161,7 +161,7 @@ export const exportarHistorialExcel = async (historial, isTN) => {
     const motivo = (h.motivo || '').toLowerCase()
 
     if (h.despacho_id) {
-      operacionText = 'DESPACHO'
+      operacionText = h.motivo ? h.motivo.toUpperCase() : 'DESPACHO'
       opColor = 'FFF59E0B' // amber
     } else if (motivo.includes('traslado')) {
       operacionText = 'TRASLADO'
@@ -445,8 +445,8 @@ export const exportarAnalisisExcel = async ({
     if (!movMap[ds]) movMap[ds] = { ingresos: 0, salidas: 0 }
     const motivo = (h.motivo || '').toLowerCase()
     const peso = h.peso_fleje || 0
-    if (motivo.includes('ingreso') || h.recepcion_id) movMap[ds].ingresos += peso
-    else if (h.despacho_id || motivo.includes('despacho') || motivo.includes('salida')) movMap[ds].salidas += peso
+    if (h.despacho_id || motivo.includes('despacho') || motivo.includes('salida') || motivo.includes('consumo')) movMap[ds].salidas += peso
+    else if (motivo.includes('ingreso') || h.recepcion_id) movMap[ds].ingresos += peso
   })
   const movDates   = Object.keys(movMap).sort()
   const movIngr    = movDates.map(d => parseFloat((movMap[d].ingresos / (isTN ? 1000 : 1)).toFixed(2)))

@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react'
 import { X, Plus, Edit3, Layers, Hash } from 'lucide-react'
+import SearchableSelect from './SearchableSelect'
 
 export default function TorreFormModal({ 
   isOpen, 
   onClose, 
   torre, 
-  onSave 
+  onSave,
+  catalogoCostos = []
 }) {
   const [posicion, setPosicion] = useState('')
+  const [selectedProductoId, setSelectedProductoId] = useState('')
   const [nombreMedida, setNombreMedida] = useState('')
   const [cantidadMaxima, setCantidadMaxima] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -18,9 +21,15 @@ export default function TorreFormModal({
         setPosicion(torre.posicion)
         setNombreMedida(torre.nombre_medida)
         setCantidadMaxima(torre.cantidad_maxima.toString())
+        
+        // Tratar de buscar si coincide con un producto
+        const match = catalogoCostos.find(c => c.medida_corta === torre.nombre_medida || c.medida === torre.nombre_medida)
+        if (match) setSelectedProductoId(match.producto_id || match.id)
+        else setSelectedProductoId('')
       } else {
         setPosicion('')
         setNombreMedida('')
+        setSelectedProductoId('')
         setCantidadMaxima('5') // default capacity
       }
     }
@@ -34,7 +43,8 @@ export default function TorreFormModal({
       alert('Ingresa la posición')
       return
     }
-    if (!nombreMedida.trim()) {
+    const finalMedida = nombreMedida.trim()
+    if (!finalMedida) {
       alert('Ingresa el nombre de la medida')
       return
     }
@@ -48,7 +58,7 @@ export default function TorreFormModal({
     const success = await onSave({
       id: torre?.id, // Will be undefined if creating
       posicion: posicion.trim(),
-      nombre_medida: nombreMedida.trim(),
+      nombre_medida: finalMedida,
       cantidad_maxima: maxVal
     })
     setGuardando(false)
@@ -102,16 +112,21 @@ export default function TorreFormModal({
             {/* Nombre Medida */}
             <div>
               <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5">Nombre Medida</label>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  placeholder="Ej: 304 x 2.00"
-                  required
-                  value={nombreMedida}
-                  onChange={(e) => setNombreMedida(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-xl px-4 py-2.5 pl-10 text-foreground text-sm focus:outline-none focus:border-accent transition-colors"
+              <div className="relative h-11">
+                <SearchableSelect
+                  options={catalogoCostos.map(p => ({
+                    value: p.producto_id || p.id,
+                    label: p.medida_corta || p.medida,
+                    sublabel: p.glosa ? `${p.codigo} - ${p.glosa}` : p.codigo
+                  }))}
+                  value={selectedProductoId}
+                  onChange={(id) => {
+                    setSelectedProductoId(id)
+                    const p = catalogoCostos.find(x => (x.producto_id || x.id) === id)
+                    if (p) setNombreMedida(p.medida_corta || p.medida)
+                  }}
+                  placeholder="Seleccionar Medida Oficial..."
                 />
-                <span className="text-text-muted text-xs font-bold absolute left-3.5 top-1/2 -translate-y-1/2 select-none">M</span>
               </div>
             </div>
 

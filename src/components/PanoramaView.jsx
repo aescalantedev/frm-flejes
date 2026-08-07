@@ -145,14 +145,7 @@ export default function PanoramaView({
     
     flejes.forEach(f => {
       pesoTorre += f.peso
-      const medidaToUse = f.medida || torre.nombre_medida
-      if (medidaToUse) {
-        const normalized = normalizeMedida(medidaToUse)
-        const catItem = catalogoCostos.find(c => c.medida === normalized)
-        if (catItem) {
-          costoTotalTorre += (f.peso * parseFloat(catItem.costo_kg))
-        }
-      }
+      costoTotalTorre += (f.peso * (parseFloat(f.costo_kg_ingreso) || 0))
     })
 
     const capMax = torre.cantidad_maxima
@@ -331,6 +324,7 @@ export default function PanoramaView({
                 const isSelected = dispatchActive && dispatchCart.some(item => item.id === fleje.id)
                 const canSelect = !dispatchActive || (itemIndex === highestUnselectedIdx || itemIndex === lowestSelectedIdx)
                 const showDiffMeasure = fleje.medida && fleje.medida !== torre.nombre_medida
+                const costoFleje = fleje.peso * (parseFloat(fleje.costo_kg_ingreso) || 0)
 
                 visualStack.push(
                   <div 
@@ -356,26 +350,39 @@ export default function PanoramaView({
                       }
                     `}
                   >
-                    <span className={`text-[9px] font-semibold font-mono ${isSelected ? 'text-white/80' : 'text-text-muted'}`}>#{itemIndex + 1}</span>
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      <span className="text-xs font-bold font-mono truncate">{isTN ? (fleje.peso / 1000).toFixed(3) : fleje.peso.toFixed(2)}</span>
-                      {showDiffMeasure && (
-                        <span 
-                          title={`Medida diferente: ${fleje.medida}`}
-                          className={`text-[8px] font-extrabold px-1 py-0.5 rounded border leading-none font-mono uppercase shrink-0 ${
-                            isSelected
-                              ? 'bg-white text-warning border-white'
-                              : 'bg-warning/15 text-warning border-warning/30 animate-pulse'
-                          }`}
-                        >
-                          {fleje.medida}
+                    <span className={`text-[9px] font-semibold font-mono w-4 shrink-0 ${isSelected ? 'text-white/80' : 'text-text-muted'}`}>#{itemIndex + 1}</span>
+                    <div className="flex flex-1 items-center justify-between overflow-hidden mx-1.5">
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-bold font-mono">{isTN ? (fleje.peso / 1000).toFixed(3) : fleje.peso.toFixed(2)} {isTN ? 't' : 'kg'}</span>
+                        {showDiffMeasure && (
+                          <span 
+                            title={`Medida diferente: ${fleje.medida}`}
+                            className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded border leading-none font-mono uppercase ${
+                              isSelected
+                                ? 'bg-white text-warning border-white'
+                                : 'bg-warning/15 text-warning border-warning/30 animate-pulse'
+                            }`}
+                          >
+                            {fleje.medida}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {costoFleje > 0 && (
+                        <span className={`text-[9.5px] font-black font-mono px-2 py-0.5 rounded border shadow-xs ml-2 truncate tracking-tight ${
+                          isSelected 
+                            ? 'bg-white/20 text-white border-white/30' 
+                            : 'bg-surface border-border/60 text-foreground/90'
+                        }`}>
+                          S/ {costoFleje.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </span>
                       )}
                     </div>
+
                     {isSelected ? (
                       <Check className="w-3.5 h-3.5 text-white animate-scaleUp shrink-0" />
                     ) : (
-                      <span className="text-[9px] text-text-muted font-mono shrink-0">{isTN ? 't' : 'kg'}</span>
+                      <div className="w-3.5 shrink-0" />
                     )}
                   </div>
                 )
@@ -579,12 +586,10 @@ export default function PanoramaView({
                   <span className="text-xs text-text-muted">Total Peso:</span>
                   <span className="text-sm font-bold text-warning font-mono">{isTN ? (pesoTorre / 1000).toFixed(3) : pesoTorre.toFixed(2)} {isTN ? 't' : 'kg'}</span>
                 </div>
-                {userProfile?.rol === 'Administrador' && (
-                  <div className="flex justify-between items-center pt-1.5 animate-fadeIn">
+                <div className="flex justify-between items-center pt-1.5 animate-fadeIn">
                     <span className="text-[10px] text-text-muted font-bold tracking-wide uppercase">Valorizado:</span>
                     <span className="text-xs font-bold text-accent font-mono">S/ {costoTotalTorre.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                  </div>
-                )}
+                    </div>
               </div>
             )
           })}

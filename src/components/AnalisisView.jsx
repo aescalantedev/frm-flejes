@@ -3,7 +3,7 @@ import ReactECharts from "echarts-for-react"
 import {
   Scale, Package, CircleDollarSign, FileSpreadsheet,
   Search, X, ChevronUp, ChevronDown, ChevronsUpDown,
-  BarChart2, TrendingUp, Filter, SlidersHorizontal, Download
+  BarChart2, TrendingUp, Filter, SlidersHorizontal, Download, ArrowRightLeft
 } from "lucide-react"
 import { exportarInventarioExcel, exportarAnalisisExcel } from "../lib/reportUtils"
 
@@ -147,8 +147,8 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
       if (!map[dateStr]) map[dateStr] = { ingresos: 0, salidas: 0 }
       const motivo = (h.motivo || "").toLowerCase()
       const peso = h.peso_fleje || 0
-      if (motivo.includes("ingreso") || h.recepcion_id) map[dateStr].ingresos += peso
-      else if (h.despacho_id || motivo.includes("despacho") || motivo.includes("salida")) map[dateStr].salidas += peso
+      if (h.despacho_id || motivo.includes("despacho") || motivo.includes("salida") || motivo.includes("consumo")) map[dateStr].salidas += peso
+      else if (motivo.includes("ingreso") || h.recepcion_id) map[dateStr].ingresos += peso
     })
     const dates = Object.keys(map).sort()
     const unit = isTN ? 1000 : 1
@@ -193,7 +193,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
         const peso = isTN ? (f.peso / 1000) : f.peso
         let valor = null
         if (userProfile?.rol === "Administrador" && medida) { const cat = catalogoCostos.find(c => c.medida === normalizeMedida(medida)); if (cat) valor = f.peso * parseFloat(cat.costo_kg) }
-        rows.push({ torre: t.posicion, nivel: idx + 1, medida, peso, valor })
+        rows.push({ torre: t.posicion, nivel: idx + 1, codigo: f.codigo, glosa: f.glosa, medida, peso, valor })
       })
     })
     return rows
@@ -226,7 +226,37 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
   const TABS = [
     { id: "graficos", label: "Gráficos", icon: BarChart2 },
     { id: "inventario", label: "Inventario", icon: Package },
+    { id: "flujo", label: "Flujo Valorizado", icon: ArrowRightLeft },
   ]
+
+  const flujoData = useMemo(() => {
+    const map = {}
+    const limitDate = new Date(); limitDate.setDate(limitDate.getDate() - periodoMovimientos)
+    
+    historial.forEach(h => {
+      const d = new Date(h.created_at); if (d < limitDate) return
+      const medida = h.medida || "Mixto"
+      if (!map[medida]) {
+        map[medida] = { medida, ingresoPeso: 0, salidaPeso: 0, ingresoValor: 0, salidaValor: 0 }
+      }
+      
+      const peso = h.peso_fleje || 0
+      const cat = catalogoCostos.find(c => c.medida === normalizeMedida(medida))
+      const costoToUse = h.costo_kg_aplicado || (cat ? parseFloat(cat.costo_kg) : 0)
+      const valor = peso * costoToUse
+      
+      const motivo = (h.motivo || "").toLowerCase()
+      if (h.despacho_id || motivo.includes("despacho") || motivo.includes("salida") || motivo.includes("consumo")) {
+        map[medida].salidaPeso += peso
+        map[medida].salidaValor += valor
+      } else if (motivo.includes("ingreso") || h.recepcion_id) {
+        map[medida].ingresoPeso += peso
+        map[medida].ingresoValor += valor
+      }
+    })
+    
+    return Object.values(map).sort((a, b) => b.ingresoValor - a.ingresoValor)
+  }, [historial, periodoMovimientos, catalogoCostos])
 
   // ── Handler de exportación del dashboard ─────────────────────────────────
   const handleExportarAnalisis = async () => {
@@ -446,6 +476,8 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                     {[
                       { key: "torre", label: "Torre", align: "left" },
                       { key: "nivel", label: "#", align: "center" },
+                      { key: "codigo", label: "Código", align: "left" },
+                      { key: "glosa", label: "Descripción", align: "left" },
                       { key: "medida", label: "Medida", align: "center" },
                       { key: "peso", label: `Peso (${isTN ? "t" : "kg"})`, align: "right" },
                       ...(userProfile?.rol === "Administrador" ? [{ key: "valor", label: "Valorización", align: "right" }] : [])
@@ -462,6 +494,8 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                     <tr key={i} className="hover:bg-surface-hover transition-colors">
                       <td className="px-4 py-2.5 font-bold text-foreground font-mono">{row.torre}</td>
                       <td className="px-4 py-2.5 text-center text-xs text-text-muted">#{row.nivel}</td>
+                      <td className="px-4 py-2.5 text-left font-mono text-xs text-text-muted">{row.codigo || "-"}</td>
+                      <td className="px-4 py-2.5 text-left text-xs truncate max-w-[150px]">{row.glosa || "-"}</td>
                       <td className="px-4 py-2.5 text-center font-mono text-xs">{row.medida}</td>
                       <td className="px-4 py-2.5 text-right font-mono font-bold">{row.peso.toFixed(2)}</td>
                       {userProfile?.rol === "Administrador" && (
@@ -472,7 +506,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan="5" className="px-6 py-10 text-center text-text-muted italic text-sm">
+                      <td colSpan="7" className="px-6 py-10 text-center text-text-muted italic text-sm">
                         {busquedaInv || filtroMedida !== "todas" ? "Sin resultados — prueba cambiando los filtros" : "No hay inventario almacenado"}
                       </td>
                     </tr>
@@ -481,13 +515,97 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                 {filteredRows.length > 0 && (
                   <tfoot className="bg-bg border-t-2 border-border">
                     <tr>
-                      <td colSpan="3" className="px-4 py-2.5 text-[10px] font-bold text-text-muted uppercase tracking-wider">Total ({filteredRows.length} flejes)</td>
+                      <td colSpan="5" className="px-4 py-2.5 text-[10px] font-bold text-text-muted uppercase tracking-wider">Total ({filteredRows.length} flejes)</td>
                       <td className="px-4 py-2.5 text-right font-mono font-black text-foreground text-sm">{isTN ? (totalPesoFiltrado / 1000).toFixed(2) : totalPesoFiltrado.toFixed(0)}</td>
                       {userProfile?.rol === "Administrador" && (
                         <td className="px-4 py-2.5 text-right font-mono font-black text-accent text-sm">
                           {totalValorFiltrado > 0 ? `S/ ${totalValorFiltrado.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "-"}
                         </td>
                       )}
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB: FLUJO VALORIZADO ── */}
+      {activeTab === "flujo" && (
+        <div className="animate-fadeIn space-y-4">
+          <div className="flex items-center justify-between bg-surface border border-border rounded-2xl p-4 shadow-xs">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <ArrowRightLeft className="w-4 h-4 text-accent" />
+              Flujo de Valor por Producto
+            </h3>
+            <div className="flex items-center gap-1 bg-bg border border-border rounded-xl p-0.5">
+              {[7, 14, 30, 90].map(d => (
+                <button key={d} onClick={() => setPeriodoMovimientos(d)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${periodoMovimientos === d ? "bg-accent text-white shadow-sm" : "text-text-muted hover:text-foreground hover:bg-surface"}`}>
+                  {d}d
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xs">
+            <div className="overflow-x-auto max-h-[520px]">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-bg/50 border-b border-border text-[10px] uppercase tracking-wider text-text-muted sticky top-0 z-10">
+                  <tr>
+                    <th className="p-4 font-semibold w-1/4">Medida</th>
+                    <th className="p-4 font-semibold text-right text-success">Ingresos ({isTN ? "t" : "kg"})</th>
+                    <th className="p-4 font-semibold text-right text-success">Valor Ingresos</th>
+                    <th className="p-4 font-semibold text-right text-danger">Salidas ({isTN ? "t" : "kg"})</th>
+                    <th className="p-4 font-semibold text-right text-danger">Valor Salidas</th>
+                    <th className="p-4 font-semibold text-right">Balance Neto</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border text-sm">
+                  {flujoData.length > 0 ? flujoData.map((row, i) => {
+                    const pesoIn = isTN ? row.ingresoPeso / 1000 : row.ingresoPeso
+                    const pesoOut = isTN ? row.salidaPeso / 1000 : row.salidaPeso
+                    const valNeto = row.ingresoValor - row.salidaValor
+                    return (
+                      <tr key={i} className="hover:bg-bg/50 transition-colors">
+                        <td className="p-4 font-bold text-foreground font-mono">{row.medida}</td>
+                        <td className="p-4 text-right font-mono text-success">{pesoIn > 0 ? `+${pesoIn.toFixed(2)}` : "-"}</td>
+                        <td className="p-4 text-right font-mono text-success">{row.ingresoValor > 0 ? `S/ ${row.ingresoValor.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2})}` : "-"}</td>
+                        <td className="p-4 text-right font-mono text-danger">{pesoOut > 0 ? `-${pesoOut.toFixed(2)}` : "-"}</td>
+                        <td className="p-4 text-right font-mono text-danger">{row.salidaValor > 0 ? `S/ ${row.salidaValor.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2})}` : "-"}</td>
+                        <td className={`p-4 text-right font-mono font-bold ${valNeto > 0 ? 'text-success' : valNeto < 0 ? 'text-danger' : 'text-text-muted'}`}>
+                          {valNeto > 0 ? '+' : ''}{valNeto !== 0 ? `S/ ${valNeto.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2})}` : "-"}
+                        </td>
+                      </tr>
+                    )
+                  }) : (
+                    <tr>
+                      <td colSpan="6" className="p-8 text-center text-text-muted italic text-sm">
+                        No hay movimientos valorizados en los últimos {periodoMovimientos} días
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {flujoData.length > 0 && (
+                  <tfoot className="bg-bg border-t-2 border-border sticky bottom-0 z-10">
+                    <tr className="font-bold text-sm">
+                      <td className="p-4 text-foreground text-xs uppercase tracking-wider">TOTAL</td>
+                      <td className="p-4 text-right text-success font-black">
+                        +{(flujoData.reduce((s, r) => s + (isTN ? r.ingresoPeso/1000 : r.ingresoPeso), 0)).toFixed(2)}
+                      </td>
+                      <td className="p-4 text-right text-success font-black">
+                        S/ {flujoData.reduce((s, r) => s + r.ingresoValor, 0).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2})}
+                      </td>
+                      <td className="p-4 text-right text-danger font-black">
+                        -{(flujoData.reduce((s, r) => s + (isTN ? r.salidaPeso/1000 : r.salidaPeso), 0)).toFixed(2)}
+                      </td>
+                      <td className="p-4 text-right text-danger font-black">
+                        S/ {flujoData.reduce((s, r) => s + r.salidaValor, 0).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2})}
+                      </td>
+                      <td className="p-4 text-right text-foreground font-black">
+                        S/ {(flujoData.reduce((s, r) => s + r.ingresoValor - r.salidaValor, 0)).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2})}
+                      </td>
                     </tr>
                   </tfoot>
                 )}

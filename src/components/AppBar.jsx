@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Search, RefreshCw, Plus, Calendar, X, LogOut, User, ArrowLeft, Shield } from 'lucide-react'
+import { Search, RefreshCw, Plus, Calendar, X, LogOut, User, ArrowLeft, Shield, Database } from 'lucide-react'
 
 export default function AppBar({ 
   seccionActual, 
@@ -152,8 +152,6 @@ export default function AppBar({
               </button>
             )}
 
-            {/* Calendario de Historial removido y co-localizado en HistorialView */}
-
             {/* Crear Torre */}
             {seccionActual === 'torres' && (
               <button 
@@ -203,7 +201,7 @@ export default function AppBar({
                         className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-xs font-semibold text-foreground hover:bg-surface-hover transition-colors text-left cursor-pointer min-h-[36px]"
                       >
                         <Shield className="w-3.5 h-3.5 text-text-muted" />
-                        <span>Usuarios y Roles</span>
+                        <span>Gestión de Accesos</span>
                       </button>
                     )}
                     

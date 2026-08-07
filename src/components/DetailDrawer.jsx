@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { X, Plus, Trash2, ArrowRightLeft, Percent, Scale, Check, AlertTriangle, Edit3 } from 'lucide-react'
+import SearchableSelect from './SearchableSelect'
 
 // Utilidad para normalizar medidas ("284 X 2.0" -> "284X2") y asegurar que coincida con la DB
 const normalizeMedida = (m) => {
@@ -27,6 +28,7 @@ export default function DetailDrawer({
   onEliminarVariosFlejes,
   onAbrirTraslado,
   catalogoCostos = [],
+  catalogoProductos = [],
   userProfile 
 }) {
   // Estado del menú de opciones de fleje activo (Bottom Sheet / Dialog)
@@ -55,6 +57,7 @@ export default function DetailDrawer({
   const lleno = cantidadActual >= cantidadMaxima
   const porcentaje = cantidadMaxima > 0 ? (cantidadActual / cantidadMaxima) * 100 : 0
   const pesoTotal = flejes.reduce((sum, f) => sum + f.peso, 0)
+  const costoTotalTorre = flejes.reduce((sum, f) => sum + (f.peso * (parseFloat(f.costo_kg_ingreso) || 0)), 0)
   const pesoPromedio = cantidadActual > 0 ? pesoTotal / cantidadActual : 0
 
   // Toggles de selección múltiple
@@ -99,9 +102,24 @@ export default function DetailDrawer({
 
   // Configuración de la edición de peso y medida
   const handleStartEdit = (fleje, num) => {
-    setEditModalConfig({ id: fleje.id, num, peso: fleje.peso, medida: fleje.medida || '' })
+    let initProdId = fleje.producto_id || ''
+    // FIX OLD BAD DATA: If initProdId is actually a kardex_costos.id (from the old bug), convert it to catalogo_productos.id
+    if (initProdId && !catalogoProductos.find(p => p.id === initProdId)) {
+      const kMatch = catalogoCostos.find(k => k.id === initProdId)
+      if (kMatch) {
+        initProdId = kMatch.producto_id
+      }
+    }
+    
+    setEditModalConfig({ 
+      id: fleje.id, 
+      num, 
+      peso: fleje.peso, 
+      producto_id: initProdId,
+      medida: fleje.medida || (catalogoProductos.find(p => p.id === initProdId)?.medida || '')
+    })
     setEditPeso(String(fleje.peso))
-    setEditMedida(fleje.medida || '')
+    setEditMedida(initProdId)
   }
 
   const handleSaveEditClick = () => {
@@ -116,9 +134,15 @@ export default function DetailDrawer({
     if (editPeso !== String(editModalConfig.peso)) {
       msgChanges.push(`peso de ${editModalConfig.peso.toFixed(2)} kg a ${val.toFixed(2)} kg`)
     }
-    const finalMedida = editMedida.trim()
-    if (finalMedida !== editModalConfig.medida) {
-      msgChanges.push(`medida a ${finalMedida || 'la predeterminada de la torre'}`)
+    
+    let prod = null
+    if (editMedida !== editModalConfig.producto_id && editMedida !== '') {
+      // Find cost info using catalogoCostos but we select using full catalogoProductos
+      const costoInfo = catalogoCostos.find(p => getProdId(p) === editMedida)
+      prod = catalogoProductos.find(p => p.id === editMedida) || costoInfo
+      if (prod) {
+        msgChanges.push(`producto a ${prod.medida_corta || prod.medida}`)
+      }
     }
     
     if (msgChanges.length === 0) {
@@ -131,7 +155,13 @@ export default function DetailDrawer({
       message: `¿Estás seguro de cambiar el ${msgChanges.join(' y la ')} del Fleje #${editModalConfig.num}?`,
       type: 'warning',
       onConfirm: async () => {
-        await onEditarFleje(editModalConfig.id, val, finalMedida)
+        let nProdId = editMedida || null
+        let nCosto = 0
+        if (nProdId) {
+          const costoInfo = catalogoCostos.find(c => getProdId(c) === nProdId)
+          nCosto = costoInfo ? costoInfo.costo_kg : 0
+        }
+        await onEditarFleje(editModalConfig.id, val, nProdId, nCosto)
         setEditModalConfig(null)
         setConfirmConfig(null)
       }
@@ -157,11 +187,14 @@ export default function DetailDrawer({
       handleToggleSelectFleje(fleje.id)
     } else {
       // Abre el menú inferior/popover de opciones para este fleje
-      setActiveFlejeMenu({ id: fleje.id, num, peso: fleje.peso })
+      setActiveFlejeMenu({ ...fleje, num })
     }
   }
 
   // Color de barra de progreso
+  // Utilidad para extraer ID del producto
+  const getProdId = (p) => p.producto_id || p.id
+  
   const getProgressColor = (pct) => {
     if (pct >= 100) return 'bg-danger'
     if (pct >= 60) return 'bg-warning'
@@ -297,55 +330,55 @@ export default function DetailDrawer({
                 No hay flejes registrados en esta torre
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 w-full">
                 {flejes.map((fleje, idx) => {
                   const isSelected = selectedFlejeIds.includes(fleje.id)
                   const num = idx + 1
                   
-                  const medidaToUse = fleje.medida || torre.nombre_medida
-                  let costoFleje = 0
-                  if (medidaToUse) {
-                    const normalized = normalizeMedida(medidaToUse)
-                    const catItem = catalogoCostos.find(c => c.medida === normalized)
-                    if (catItem) costoFleje = fleje.peso * parseFloat(catItem.costo_kg)
-                  }
+                  const costoFleje = fleje.peso * (parseFloat(fleje.costo_kg_ingreso) || 0)
 
                   return (
                     <div 
                       key={fleje.id} 
                       onClick={() => handleChipClick(fleje, num)}
                       className={`
-                        relative border rounded-xl p-3.5 flex flex-col justify-center items-center transition-all cursor-pointer select-none active:scale-97
+                        relative border rounded-xl p-2.5 flex flex-col gap-1.5 transition-all 
+                        cursor-pointer select-none active:scale-97
                         ${isSelected 
                           ? 'bg-accent/15 border-accent shadow-xs ring-1 ring-accent/30' 
-                          : 'bg-accent/5 border-accent/20 hover:border-accent/40 active:bg-accent/10'
+                          : 'bg-bg hover:bg-surface-hover border-border hover:border-accent/30'
                         }
                       `}
                     >
                       {/* Indicador Checkmark discreto en esquina en modo selección */}
                       {selectionMode && (
-                        <div className={`absolute top-2 left-2 w-4.5 h-4.5 rounded-full border flex items-center justify-center transition-colors
-                          ${isSelected 
-                            ? 'bg-accent border-accent text-white' 
-                            : 'border-text-muted/40 bg-bg'
-                          }
+                        <div className={`
+                          absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center shadow-sm border z-10
+                          ${isSelected ? 'bg-accent border-accent/20 text-bg' : 'bg-surface border-border text-transparent'}
                         `}>
                           {isSelected && <Check className="w-2.5 h-2.5 font-bold" />}
                         </div>
                       )}
 
-                      <span className="text-[10px] text-text-muted font-medium">Fleje #{num}</span>
-                      <span className="text-xs font-black text-accent mt-0.5 font-mono">{fleje.peso.toFixed(2)} kg</span>
-                      
-                      {userProfile?.rol === 'Administrador' && costoFleje > 0 && (
-                        <span className="text-[9px] text-text-muted/80 mt-1 font-bold animate-fadeIn">
-                          S/ {costoFleje.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      <div className="flex justify-between items-center w-full">
+                        <span className="text-[10px] text-text-muted font-bold font-mono bg-bg/50 px-1.5 py-0.5 rounded border border-border/50">
+                          #{num}
                         </span>
-                      )}
-
-                      <span className="text-[9px] text-text-muted font-mono bg-bg/50 px-1.5 py-0.5 mt-1 rounded border border-border/30 truncate max-w-[90%] font-bold uppercase">
-                        {fleje.medida || torre.nombre_medida}
-                      </span>
+                        <span className={`text-[9px] font-mono px-2 py-0.5 rounded border truncate max-w-[80px] font-bold uppercase flex items-center justify-center gap-1 ${fleje.medida && fleje.medida !== torre.nombre_medida ? 'bg-accent/20 text-accent border-accent/40' : 'bg-bg/50 text-text-muted border-border/30'}`}>
+                          {fleje.medida || torre.nombre_medida}
+                          {fleje.medida && fleje.medida !== torre.nombre_medida && <AlertTriangle className="w-2.5 h-2.5" />}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-end w-full">
+                        <span className="text-sm font-black text-foreground font-mono">
+                          {fleje.peso.toFixed(2)} <span className="text-[10px] text-text-muted font-bold uppercase">kg</span>
+                        </span>
+                        {costoFleje > 0 && (
+                          <span className="text-xs text-foreground font-black animate-fadeIn font-mono">
+                            S/ {costoFleje.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -371,6 +404,12 @@ export default function DetailDrawer({
                 Promedio:
               </span>
               <strong className="text-foreground font-mono text-sm">{pesoPromedio.toFixed(2)} kg</strong>
+            </div>
+            <div className="flex justify-between items-center text-xs pt-2 border-t border-border mt-2">
+              <span className="text-[10px] text-text-muted font-bold tracking-wide uppercase">
+                VALORIZADO:
+              </span>
+              <strong className="text-accent font-mono text-sm">S/ {costoTotalTorre.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
             </div>
           </div>
 
@@ -475,14 +514,18 @@ export default function DetailDrawer({
 
               <div className="space-y-1">
                 <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider">Medida (Opcional)</label>
-                <div className="relative">
-                  <input 
-                    type="text"
-                    value={editMedida}
-                    onChange={(e) => setEditMedida(e.target.value.toUpperCase())}
-                    className="w-full bg-bg border border-border focus:border-accent rounded-xl px-4 py-2.5 text-sm font-bold font-mono outline-none uppercase placeholder:normal-case placeholder:font-sans placeholder:font-medium placeholder:text-text-muted/40"
-                    placeholder={`Ej. ${torre?.nombre_medida || '100X2.0'}`}
-                  />
+                <div className="relative h-11">
+                    <SearchableSelect
+                      options={catalogoProductos.map(p => ({
+                        value: p.id,
+                        label: p.medida_corta || p.medida,
+                        sublabel: p.glosa ? `${p.codigo} - ${p.glosa}` : p.codigo
+                      }))}
+                      value={editMedida}
+                      onChange={setEditMedida}
+                      placeholder="Seleccionar Producto Oficial..."
+                      fallbackLabel={editModalConfig.medida}
+                    />
                 </div>
                 <p className="text-[10px] text-text-muted/60 mt-1">Si dejas esto en blanco, se usará la medida por defecto de la torre.</p>
               </div>
