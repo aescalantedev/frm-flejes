@@ -59,6 +59,7 @@ export const exportarInventarioExcel = async (torres, inventarioMap, catalogoCos
     { header: 'Torre', key: 'torre', width: 12 },
     { header: 'Nivel (Fleje)', key: 'nivel', width: 15 },
     { header: 'Medida', key: 'medida', width: 20 },
+    { header: 'Descripción (Glosa)', key: 'glosa', width: 32 },
     { header: `Peso (${isTN ? 't' : 'kg'})`, key: 'peso', width: 15 },
   ]
 
@@ -80,6 +81,7 @@ export const exportarInventarioExcel = async (torres, inventarioMap, catalogoCos
         torre: t.posicion,
         nivel: `#${idx + 1}`,
         medida: medidaToUse,
+        glosa: f.glosa || '-',
         peso: pesoFormat
       }
 
@@ -101,14 +103,14 @@ export const exportarInventarioExcel = async (torres, inventarioMap, catalogoCos
       row.eachCell((cell, colNumber) => {
         if (colNumber <= columns.length) {
           cell.alignment = { vertical: 'middle', horizontal: colNumber === 1 ? 'center' : 'right' }
-          if (colNumber === 3) cell.alignment.horizontal = 'center' // Medida
+          if (colNumber === 3 || colNumber === 4) cell.alignment.horizontal = 'center' // Medida y Glosa
         }
       })
       
       // Formato numérico para peso y valor
-      row.getCell(4).numFmt = '#,##0.00'
+      row.getCell(5).numFmt = '#,##0.00'
       if (isAdmin) {
-        row.getCell(5).numFmt = '"S/" #,##0.00'
+        row.getCell(6).numFmt = '"S/" #,##0.00'
       }
       
       rowIndex++
@@ -118,7 +120,7 @@ export const exportarInventarioExcel = async (torres, inventarioMap, catalogoCos
   // Activar AutoFiltro
   sheet.autoFilter = {
     from: 'A1',
-    to: isAdmin ? 'E1' : 'D1'
+    to: isAdmin ? (String.fromCharCode(64 + columns.length) + '1') : 'E1'
   }
 
   const buffer = await workbook.xlsx.writeBuffer()
@@ -144,6 +146,7 @@ export const exportarHistorialExcel = async (historial, isTN) => {
     { header: 'Destino / Destino', key: 'destino', width: 20 },
     { header: 'Nro. Guía / Solicitud', key: 'solicitud', width: 22 },
     { header: 'Medida', key: 'medida', width: 18 },
+    { header: 'Descripción (Glosa)', key: 'glosa', width: 32 },
     { header: `Peso (${isTN ? 't' : 'kg'})`, key: 'peso', width: 15 },
     { header: 'Responsable', key: 'responsable', width: 25 },
     { header: 'Empresa / Transportista', key: 'empresa', width: 28 },
@@ -211,6 +214,7 @@ export const exportarHistorialExcel = async (historial, isTN) => {
       destino: destinoFinal,
       solicitud: numSolicitud,
       medida: h.medida || '-',
+      glosa: h.glosa || '-',
       peso: pesoFormat,
       responsable: responsable,
       empresa: empresa,
@@ -224,18 +228,18 @@ export const exportarHistorialExcel = async (historial, isTN) => {
     row.eachCell((cell, colNumber) => {
       cell.alignment = { vertical: 'middle', horizontal: 'center' }
       if (colNumber === 1) cell.alignment.horizontal = 'left'  // Fecha
-      if (colNumber === 7) cell.alignment.horizontal = 'right' // Peso
-      if (colNumber === 8) cell.alignment.horizontal = 'left'  // Responsable
-      if (colNumber === 9) cell.alignment.horizontal = 'left'  // Empresa
+      if (colNumber === 8) cell.alignment.horizontal = 'right' // Peso
+      if (colNumber === 9) cell.alignment.horizontal = 'left'  // Responsable
+      if (colNumber === 10) cell.alignment.horizontal = 'left' // Empresa
     })
 
-    row.getCell(7).numFmt = '#,##0.00'
+    row.getCell(8).numFmt = '#,##0.00'
   })
 
   // Activar AutoFiltro
   sheet.autoFilter = {
     from: 'A1',
-    to: 'I1'
+    to: 'J1'
   }
 
   const buffer = await workbook.xlsx.writeBuffer()
@@ -350,6 +354,7 @@ export const exportarTorresExcel = async (torres, inventarioMap, isTN) => {
     { header: 'Torre',         key: 'torre',    width: 14 },
     { header: 'Nivel (#)',     key: 'nivel',    width: 10 },
     { header: 'Medida',        key: 'medida',   width: 22 },
+    { header: 'Descripción (Glosa)', key: 'glosa', width: 32 },
     { header: `Peso (${isTN ? 't' : 'kg'})`, key: 'peso', width: 15 },
   ]
   sheetDetalle.columns = colsDetalle
@@ -365,16 +370,17 @@ export const exportarTorresExcel = async (torres, inventarioMap, isTN) => {
         torre: t.posicion,
         nivel: `#${idx + 1}`,
         medida,
+        glosa: f.glosa || '-',
         peso: parseFloat(pesoFormat.toFixed(2))
       })
-      row.getCell(4).numFmt = '#,##0.00'
+      row.getCell(5).numFmt = '#,##0.00'
       row.eachCell((cell, colNumber) => {
-        cell.alignment = { vertical: 'middle', horizontal: colNumber === 4 ? 'right' : colNumber === 3 ? 'center' : 'left' }
+        cell.alignment = { vertical: 'middle', horizontal: colNumber === 5 ? 'right' : (colNumber === 3 || colNumber === 4 ? 'center' : 'left') }
       })
     })
   })
 
-  sheetDetalle.autoFilter = { from: 'A1', to: 'D1' }
+  sheetDetalle.autoFilter = { from: 'A1', to: 'E1' }
 
   // ── Descargar ──────────────────────────────────────────────────────────
   const buffer = await workbook.xlsx.writeBuffer()
@@ -578,6 +584,7 @@ export const exportarAnalisisExcel = async ({
     { header: 'Torre',  key: 'torre',  width: 14 },
     { header: 'Nivel',  key: 'nivel',  width: 10 },
     { header: 'Medida', key: 'medida', width: 22 },
+    { header: 'Descripción (Glosa)', key: 'glosa', width: 32 },
     { header: `Peso (${unit})`, key: 'peso', width: 16 },
     ...(isAdmin ? [{ header: 'Valorización (S/)', key: 'valor', width: 22 }] : []),
   ]
@@ -592,14 +599,20 @@ export const exportarAnalisisExcel = async ({
         const cat = catalogoCostos.find(c => c.medida === normalizeMedida(medida))
         if (cat) valorVal = f.peso * parseFloat(cat.costo_kg)
       }
-      const rowData = { torre: t.posicion, nivel: `#${idx + 1}`, medida, peso: parseFloat(pesoVal.toFixed(2)) }
+      const rowData = { 
+        torre: t.posicion, 
+        nivel: `#${idx + 1}`, 
+        medida, 
+        glosa: f.glosa || '-',
+        peso: parseFloat(pesoVal.toFixed(2)) 
+      }
       if (isAdmin) rowData.valor = valorVal != null ? parseFloat(valorVal.toFixed(2)) : null
       const row = inv.addRow(rowData)
-      row.getCell(4).numFmt = '#,##0.00'
-      if (isAdmin) row.getCell(5).numFmt = '"S/" #,##0.00'
+      row.getCell(5).numFmt = '#,##0.00'
+      if (isAdmin) row.getCell(6).numFmt = '"S/" #,##0.00'
     })
   })
-  inv.autoFilter = { from: 'A1', to: isAdmin ? 'E1' : 'D1' }
+  inv.autoFilter = { from: 'A1', to: isAdmin ? 'F1' : 'E1' }
 
   // ── Hoja 3: Datos de gráficos (oculta) ───────────────────────────────────
   const datos = workbook.addWorksheet(DATA_SHEET, { state: 'hidden' })

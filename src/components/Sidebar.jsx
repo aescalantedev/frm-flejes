@@ -20,7 +20,9 @@ export default function Sidebar({
   collapsed, 
   setCollapsed,
   userProfile,
-  onLogout
+  onLogout,
+  isPublicView,
+  onShowPublicLink
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false)
   const popoverRef = useRef(null)
@@ -36,7 +38,15 @@ export default function Sidebar({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const menuItems = [
+  const menuItems = isPublicView ? [
+    {
+      category: 'Almacén',
+      items: [
+        { id: 'panorama', label: 'Panorama', icon: LayoutDashboard },
+        { id: 'analisis', label: 'Análisis', icon: LineChart }
+      ]
+    }
+  ] : [
     { 
       category: 'Almacén',
       items: [
@@ -173,6 +183,19 @@ export default function Sidebar({
               <span>Mi Perfil</span>
             </button>
             
+            {userProfile?.rol === 'Administrador' && (
+              <button
+                onClick={() => {
+                  setPopoverOpen(false)
+                  onShowPublicLink()
+                }}
+                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-xs font-semibold text-info hover:bg-info/10 hover:text-info transition-colors text-left cursor-pointer min-h-[36px]"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                <span>Copiar Link</span>
+              </button>
+            )}
+            
             <button
               onClick={() => {
                 onLogout()
@@ -188,13 +211,26 @@ export default function Sidebar({
 
         {/* Botón de Logout cuando el Sidebar está expandido */}
         {!collapsed && (
-          <button 
-            onClick={onLogout}
-            className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-destructive hover:bg-destructive/10 cursor-pointer transition-colors border border-transparent hover:border-destructive/20"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Cerrar sesión</span>
-          </button>
+          <div className="mt-3 flex flex-col gap-2">
+            {userProfile?.rol === 'Administrador' && (
+              <button 
+                onClick={() => {
+                  onShowPublicLink()
+                }}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-info hover:bg-info/10 cursor-pointer transition-colors border border-transparent hover:border-info/20"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                <span>Link Público</span>
+              </button>
+            )}
+            <button 
+              onClick={onLogout}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-destructive hover:bg-destructive/10 cursor-pointer transition-colors border border-transparent hover:border-destructive/20"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Cerrar sesión</span>
+            </button>
+          </div>
         )}
       </div>
     </aside>

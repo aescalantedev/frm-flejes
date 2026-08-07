@@ -5,6 +5,7 @@ import { exportarTorresExcel } from '../lib/reportUtils'
 export default function TorresView({ 
   torres, 
   inventario, 
+  catalogoCostos = [],
   searchQuery,
   isLoading,
   onSelectTorre, 
@@ -170,7 +171,24 @@ export default function TorresView({
                       <td className="py-4 px-6 font-bold text-accent font-mono">{torre.posicion}</td>
                       
                       {/* Medida */}
-                      <td className="py-4 px-6 font-medium text-foreground">{torre.nombre_medida}</td>
+                      <td className="py-4 px-6">
+                        {torre.nombre_medida !== 'No asignada' ? (() => {
+                          const cat = catalogoCostos.find(c => c.medida_corta === torre.nombre_medida || c.medida === torre.nombre_medida)
+                          const finalGlosa = torre.glosa_medida || (cat ? cat.glosa : null)
+                          return (
+                            <div className="flex flex-col">
+                              <span className="font-bold text-sm text-foreground">{torre.nombre_medida}</span>
+                              {finalGlosa && (
+                                <span className="mt-1 inline-flex w-fit items-center px-2 py-0.5 rounded text-[10px] font-medium bg-surface border border-border text-text-muted truncate max-w-full" title={finalGlosa}>
+                                  {finalGlosa}
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })() : (
+                          <span className="font-medium text-text-muted italic">{torre.nombre_medida}</span>
+                        )}
+                      </td>
                       
                       {/* Capacidad */}
                       <td className="py-4 px-6 text-center">
@@ -253,9 +271,20 @@ export default function TorresView({
                     </span>
                   </div>
                   
-                  <div className="flex justify-between items-baseline">
-                    <p className="text-sm text-foreground font-medium truncate max-w-[200px]">{torre.nombre_medida}</p>
-                    <p className="text-sm font-bold text-warning font-mono">{pesoTotal.toFixed(2)} kg</p>
+                  <div className="flex justify-between items-baseline gap-2">
+                    <div className="flex flex-col min-w-0">
+                      <p className="text-sm text-foreground font-bold truncate max-w-[200px]">{torre.nombre_medida}</p>
+                      {(() => {
+                        const cat = catalogoCostos.find(c => c.medida_corta === torre.nombre_medida || c.medida === torre.nombre_medida)
+                        const finalGlosa = torre.glosa_medida || (cat ? cat.glosa : null)
+                        return finalGlosa && torre.nombre_medida !== 'No asignada' && (
+                          <span className="mt-1 inline-flex w-fit items-center px-2 py-0.5 rounded text-[10px] font-medium bg-surface border border-border text-text-muted truncate max-w-full" title={finalGlosa}>
+                            {finalGlosa}
+                          </span>
+                        )
+                      })()}
+                    </div>
+                    <p className="text-sm font-bold text-warning font-mono shrink-0">{pesoTotal.toFixed(2)} kg</p>
                   </div>
 
                   {/* Acciones y Reordenamiento (Móvil) */}

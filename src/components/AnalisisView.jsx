@@ -31,7 +31,7 @@ const CHART_COLORS = [
   "#06b6d4","#84cc16","#fb923c","#a78bfa","#34d399"
 ]
 
-export default function AnalisisView({ torres = [], inventario = {}, historial = [], catalogoCostos = [], userProfile }) {
+export default function AnalisisView({ torres = [], inventario = {}, historial = [], catalogoCostos = [], userProfile, isPublicView }) {
   const unitSystem = localStorage.getItem("unitSystem") || "kg"
   const isTN = unitSystem === "t"
   const [activeTab, setActiveTab] = useState("graficos")
@@ -72,7 +72,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
   const porcentajeOcupacion = capacidadTotal > 0 ? (capacidadOcupada / capacidadTotal) * 100 : 0
 
   const valorizacionTotal = useMemo(() => {
-    if (userProfile?.rol !== "Administrador") return null
+    if (!isPublicView && userProfile?.rol !== "Administrador") return null
     let total = 0
     torres.forEach(t => {
       (inventario[t.id] || []).forEach(f => {
@@ -168,7 +168,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
   }, [historial, periodoMovimientos, isTN])
 
   const chartValorizacion = useMemo(() => {
-    if (userProfile?.rol !== "Administrador") return null
+    if (!isPublicView && userProfile?.rol !== "Administrador") return null
     const map = {}
     torres.forEach(t => {
       (inventario[t.id] || []).forEach(f => {
@@ -192,12 +192,12 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
         const medida = f.medida || t.nombre_medida || "-"
         const peso = isTN ? (f.peso / 1000) : f.peso
         let valor = null
-        if (userProfile?.rol === "Administrador" && medida) { const cat = catalogoCostos.find(c => c.medida === normalizeMedida(medida)); if (cat) valor = f.peso * parseFloat(cat.costo_kg) }
+        if ((isPublicView || userProfile?.rol === "Administrador") && medida) { const cat = catalogoCostos.find(c => c.medida === normalizeMedida(medida)); if (cat) valor = f.peso * parseFloat(cat.costo_kg) }
         rows.push({ torre: t.posicion, nivel: idx + 1, codigo: f.codigo, glosa: f.glosa, medida, peso, valor })
       })
     })
     return rows
-  }, [torres, inventario, isTN, catalogoCostos, userProfile])
+  }, [torres, inventario, isTN, catalogoCostos, userProfile, isPublicView])
 
   const filteredRows = useMemo(() => {
     let result = inventarioRows
@@ -237,7 +237,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
       const d = new Date(h.created_at); if (d < limitDate) return
       const medida = h.medida || "Mixto"
       if (!map[medida]) {
-        map[medida] = { medida, ingresoPeso: 0, salidaPeso: 0, ingresoValor: 0, salidaValor: 0 }
+        map[medida] = { medida, glosa: h.glosa || "", ingresoPeso: 0, salidaPeso: 0, ingresoValor: 0, salidaValor: 0 }
       }
       
       const peso = h.peso_fleje || 0
@@ -288,15 +288,17 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
           <h1 className="text-2xl font-black text-foreground tracking-tight">Análisis y Estadísticas</h1>
           <p className="text-sm text-text-muted mt-1">Métricas en tiempo real · {capacidadOcupada} de {capacidadTotal} posiciones</p>
         </div>
-        <button
-          onClick={handleExportarAnalisis}
-          disabled={exportandoAnalisis}
-          title="Exportar dashboard completo con gráficos a Excel"
-          className="bg-accent hover:bg-accent-hover disabled:opacity-60 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all active:scale-95 cursor-pointer shadow-sm shrink-0 ml-4"
-        >
-          <Download className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">{exportandoAnalisis ? 'Generando...' : 'Exportar Dashboard'}</span>
-        </button>
+        {!isPublicView && (
+          <button
+            onClick={handleExportarAnalisis}
+            disabled={exportandoAnalisis}
+            title="Exportar dashboard completo con gráficos a Excel"
+            className="bg-accent hover:bg-accent-hover disabled:opacity-60 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all active:scale-95 cursor-pointer shadow-sm shrink-0 ml-4"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{exportandoAnalisis ? 'Generando...' : 'Exportar Dashboard'}</span>
+          </button>
+        )}
       </div>
 
       {/* KPIs */}
@@ -438,10 +440,12 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                   <button onClick={() => setBusquedaInv("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-foreground cursor-pointer"><X className="w-3.5 h-3.5" /></button>
                 )}
               </div>
-              <button onClick={() => exportarInventarioExcel(torres, inventario, catalogoCostos, isTN, userProfile)}
-                className="bg-accent hover:bg-accent-hover text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0">
-                <FileSpreadsheet className="w-4 h-4" /><span className="hidden sm:inline">Excel</span>
-              </button>
+              {!isPublicView && (
+                <button onClick={() => exportarInventarioExcel(torres, inventario, catalogoCostos, isTN, userProfile)}
+                  className="bg-accent hover:bg-accent-hover text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0">
+                  <FileSpreadsheet className="w-4 h-4" /><span className="hidden sm:inline">Excel</span>
+                </button>
+              )}
             </div>
             {medidasUnicas.length > 0 && (
               <div className="flex flex-wrap gap-1.5 items-center">
@@ -463,7 +467,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
           <div className="flex gap-3 text-xs text-text-muted flex-wrap">
             <span className="bg-surface border border-border rounded-lg px-2.5 py-1"><span className="font-bold text-foreground">{filteredRows.length}</span> flejes</span>
             <span className="bg-surface border border-border rounded-lg px-2.5 py-1">Peso: <span className="font-bold text-foreground">{isTN ? (totalPesoFiltrado / 1000).toFixed(2) : totalPesoFiltrado.toFixed(0)} {isTN ? "t" : "kg"}</span></span>
-            {userProfile?.rol === "Administrador" && totalValorFiltrado > 0 && (
+            {(isPublicView || userProfile?.rol === "Administrador") && totalValorFiltrado > 0 && (
               <span className="bg-surface border border-border rounded-lg px-2.5 py-1">Valor: <span className="font-bold text-accent">S/ {totalValorFiltrado.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span></span>
             )}
           </div>
@@ -480,7 +484,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                       { key: "glosa", label: "Descripción", align: "left" },
                       { key: "medida", label: "Medida", align: "center" },
                       { key: "peso", label: `Peso (${isTN ? "t" : "kg"})`, align: "right" },
-                      ...(userProfile?.rol === "Administrador" ? [{ key: "valor", label: "Valorización", align: "right" }] : [])
+                      ...(isPublicView || userProfile?.rol === "Administrador" ? [{ key: "valor", label: "Valorización", align: "right" }] : [])
                     ].map(col => (
                       <th key={col.key} onClick={() => handleSort(col.key)}
                         className={`px-4 py-3.5 cursor-pointer select-none hover:text-foreground transition-colors text-${col.align}`}>
@@ -498,7 +502,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                       <td className="px-4 py-2.5 text-left text-xs truncate max-w-[150px]">{row.glosa || "-"}</td>
                       <td className="px-4 py-2.5 text-center font-mono text-xs">{row.medida}</td>
                       <td className="px-4 py-2.5 text-right font-mono font-bold">{row.peso.toFixed(2)}</td>
-                      {userProfile?.rol === "Administrador" && (
+                      {(isPublicView || userProfile?.rol === "Administrador") && (
                         <td className="px-4 py-2.5 text-right font-mono font-bold text-accent text-xs">
                           {row.valor !== null ? `S/ ${row.valor.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : <span className="text-text-muted">-</span>}
                         </td>
@@ -517,7 +521,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                     <tr>
                       <td colSpan="5" className="px-4 py-2.5 text-[10px] font-bold text-text-muted uppercase tracking-wider">Total ({filteredRows.length} flejes)</td>
                       <td className="px-4 py-2.5 text-right font-mono font-black text-foreground text-sm">{isTN ? (totalPesoFiltrado / 1000).toFixed(2) : totalPesoFiltrado.toFixed(0)}</td>
-                      {userProfile?.rol === "Administrador" && (
+                      {(isPublicView || userProfile?.rol === "Administrador") && (
                         <td className="px-4 py-2.5 text-right font-mono font-black text-accent text-sm">
                           {totalValorFiltrado > 0 ? `S/ ${totalValorFiltrado.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "-"}
                         </td>
@@ -569,7 +573,16 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
                     const valNeto = row.ingresoValor - row.salidaValor
                     return (
                       <tr key={i} className="hover:bg-bg/50 transition-colors">
-                        <td className="p-4 font-bold text-foreground font-mono">{row.medida}</td>
+                        <td className="p-4">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-foreground font-mono">{row.medida}</span>
+                            {row.glosa && (
+                              <span className="mt-1 inline-flex w-fit items-center px-2 py-0.5 rounded text-[10px] font-medium bg-surface border border-border text-text-muted truncate max-w-full" title={row.glosa}>
+                                {row.glosa}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-4 text-right font-mono text-success">{pesoIn > 0 ? `+${pesoIn.toFixed(2)}` : "-"}</td>
                         <td className="p-4 text-right font-mono text-success">{row.ingresoValor > 0 ? `S/ ${row.ingresoValor.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2})}` : "-"}</td>
                         <td className="p-4 text-right font-mono text-danger">{pesoOut > 0 ? `-${pesoOut.toFixed(2)}` : "-"}</td>

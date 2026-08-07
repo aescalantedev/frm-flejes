@@ -32,7 +32,8 @@ export default function PanoramaView({
   dispatchCart = [],
   showToast,
   catalogoCostos = [],
-  userProfile
+  userProfile,
+  isPublicView
 }) {
   const [filtroEstado, setFiltroEstado] = useState('todas')
 
@@ -206,8 +207,8 @@ export default function PanoramaView({
         ))}
       </div>
 
-      {/* Operaciones Rápidas de Almacén (Solo visibles si no hay sesión activa y no está cargando) */}
-      {!receptionActive && !dispatchActive && (
+      {/* Operaciones Rápidas de Almacén (Solo visibles si no hay sesión activa, no está cargando y no es vista pública) */}
+      {!receptionActive && !dispatchActive && !isPublicView && (
         <div ref={topButtonsRef} className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-2 animate-fadeIn">
           <button 
             onClick={onStartReception}
@@ -455,6 +456,7 @@ export default function PanoramaView({
             }
 
             const handleCardClick = () => {
+              if (isPublicView) return;
               if (receptionActive) {
                 if (isFull) {
                   showToast('Esta torre está llena', true)
@@ -504,8 +506,18 @@ export default function PanoramaView({
                       {statusText}
                     </span>
                   </div>
-                  <p className="text-xs text-text-muted mb-4">{torre.nombre_medida}</p>
-
+                  <div className="flex flex-col min-w-0 mb-4">
+                    <p className="text-sm text-foreground font-bold truncate max-w-[200px]">{torre.nombre_medida}</p>
+                    {(() => {
+                      const cat = catalogoCostos.find(c => c.medida_corta === torre.nombre_medida || c.medida === torre.nombre_medida)
+                      const finalGlosa = torre.glosa_medida || (cat ? cat.glosa : null)
+                      return finalGlosa && torre.nombre_medida !== 'No asignada' && (
+                        <span className="mt-1 inline-flex w-fit items-center px-2 py-0.5 rounded text-[10px] font-medium bg-surface border border-border text-text-muted truncate max-w-full" title={finalGlosa}>
+                          {finalGlosa}
+                        </span>
+                      )
+                    })()}
+                  </div>
                   {/* Barra de progreso de ocupación */}
                   <div className="mb-4">
                     <div className="flex justify-between text-[10px] text-text-muted mb-1 font-semibold">
@@ -568,7 +580,7 @@ export default function PanoramaView({
                 </div>
 
                 {/* Botón de ingreso rápido táctil (solo en recepción activa) */}
-                {receptionActive && !isFull && (
+                {receptionActive && !isFull && !isPublicView && (
                   <button 
                     onClick={(e) => {
                       e.stopPropagation()
@@ -597,7 +609,7 @@ export default function PanoramaView({
       )}
       
       {/* ==================== FLOATING ACTION BUTTONS (FAB) ==================== */}
-      {showFABs && !receptionActive && !dispatchActive && (
+      {showFABs && !receptionActive && !dispatchActive && !isPublicView && (
         <div className="fixed bottom-24 right-6 md:bottom-8 md:right-8 z-40 flex flex-col gap-4 animate-slideUp">
           {/* Dispatch FAB */}
           <button 

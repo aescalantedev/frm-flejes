@@ -11,7 +11,9 @@ export default function AppBar({
   filtroFecha,
   setFiltroFecha,
   userProfile,
-  onLogout
+  onLogout,
+  isPublicView,
+  onShowPublicLink
 }) {
   const [searchFocused, setSearchFocused] = useState(false)
   const [mobileSearchActive, setMobileSearchActive] = useState(false)
@@ -193,16 +195,28 @@ export default function AppBar({
                     </button>
                     
                     {userProfile?.rol === 'Administrador' && (
-                      <button
-                        onClick={() => {
-                          setSeccionActual('users')
-                          setUserMenuOpen(false)
-                        }}
-                        className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-xs font-semibold text-foreground hover:bg-surface-hover transition-colors text-left cursor-pointer min-h-[36px]"
-                      >
-                        <Shield className="w-3.5 h-3.5 text-text-muted" />
-                        <span>Gestión de Accesos</span>
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            setSeccionActual('users')
+                            setUserMenuOpen(false)
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-semibold text-text-muted hover:bg-surface-hover hover:text-foreground rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
+                        >
+                          <Shield className="w-3.5 h-3.5 text-text-muted" />
+                          <span>Gestión de Accesos</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setUserMenuOpen(false)
+                            onShowPublicLink()
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-semibold text-info hover:bg-info/10 hover:text-info rounded-lg transition-colors flex items-center gap-2 cursor-pointer border border-transparent hover:border-info/20 mt-1"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                          <span>Copiar Link Público</span>
+                        </button>
+                      </>
                     )}
                     
                     <button

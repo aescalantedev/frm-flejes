@@ -59,6 +59,7 @@ export default function TorreFormModal({
       id: torre?.id, // Will be undefined if creating
       posicion: posicion.trim(),
       nombre_medida: finalMedida,
+      producto_sugerido_id: selectedProductoId || null,
       cantidad_maxima: maxVal
     })
     setGuardando(false)

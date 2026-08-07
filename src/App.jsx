@@ -11,7 +11,9 @@ import {
   AlertTriangle,
   Clock,
   Truck,
-  LineChart
+  LineChart,
+  X,
+  Link as LinkIcon
 } from 'lucide-react'
 import { applyTheme } from './lib/theme'
 
@@ -41,6 +43,12 @@ function App() {
   const [session, setSession] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
   const [loadingAuth, setLoadingAuth] = useState(true)
+  const [showPublicLinkModal, setShowPublicLinkModal] = useState(false)
+
+  const urlParams = new URLSearchParams(window.location.search)
+  const isPublicView = urlParams.get('public') === 'true'
+  const activeProfile = isPublicView ? { name: 'Espectador', rol: 'Publico', aprobado: true } : userProfile
+
 
   // Escuchar estado de autenticación y cargar perfil de Supabase
   useEffect(() => {
@@ -144,7 +152,7 @@ function App() {
 
   // Redirección de seguridad: Operadores no pueden ver Torres
   useEffect(() => {
-    if (userProfile && userProfile.rol !== 'Administrador' && seccionActual === 'torres') {
+    if (activeProfile && activeProfile.rol !== 'Administrador' && seccionActual === 'torres') {
       setSeccionActual('panorama')
     }
   }, [seccionActual, userProfile])
@@ -310,7 +318,7 @@ function App() {
           capacidad_maxima,
           orden_visual,
           producto_sugerido_id,
-          catalogo_productos!producto_sugerido_id(medida_corta),
+          catalogo_productos!producto_sugerido_id(medida_corta, glosa),
           flejes (
             id,
             ubicacion_id,
@@ -333,6 +341,7 @@ function App() {
         id: u.id,
         posicion: u.codigo_posicion,
         nombre_medida: u.catalogo_productos?.medida_corta || 'No asignada',
+        glosa_medida: u.catalogo_productos?.glosa || '',
         cantidad_maxima: u.capacidad_maxima,
         orden: u.orden_visual,
         producto_sugerido_id: u.producto_sugerido_id,
@@ -441,6 +450,7 @@ function App() {
          posicion: h.ubicaciones?.codigo_posicion || 'Sin Torre',
          medida: h.catalogo_productos?.medida_corta || 'Mixto',
          codigo: h.catalogo_productos?.codigo || '',
+         glosa: h.catalogo_productos?.glosa || '',
          peso_fleje: h.peso_kg,
          costo_kg_aplicado: h.costo_kg_aplicado,
          motivo: h.motivo,
@@ -492,6 +502,7 @@ function App() {
           .from('ubicaciones')
           .update({
             codigo_posicion: torreData.posicion,
+            producto_sugerido_id: torreData.producto_sugerido_id,
             capacidad_maxima: torreData.cantidad_maxima
           })
           .eq('id', torreData.id)
@@ -504,6 +515,7 @@ function App() {
           .from('ubicaciones')
           .insert([{
             codigo_posicion: torreData.posicion,
+            producto_sugerido_id: torreData.producto_sugerido_id,
             capacidad_maxima: torreData.cantidad_maxima
           }])
 
@@ -1033,7 +1045,7 @@ function App() {
     { id: 'transport', label: 'Transporte', icon: Truck }
   ].filter(Boolean)
 
-  if (loadingAuth) {
+  if (loadingAuth && !isPublicView) {
     return (
       <div className="min-h-screen bg-bg flex flex-col items-center justify-center text-text-muted">
         <Loader2 className="w-8 h-8 animate-spin text-accent mb-4" />
@@ -1042,7 +1054,7 @@ function App() {
     )
   }
 
-  if (!session || !userProfile) {
+  if (!isPublicView && (!session || !userProfile)) {
     return (
       <>
         <LoginScreen showToast={showToast} />
@@ -1057,7 +1069,7 @@ function App() {
     )
   }
 
-  if (userProfile && userProfile.aprobado === false) {
+  if (!isPublicView && activeProfile && activeProfile.aprobado === false) {
     return (
       <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-6 text-center transition-all duration-300">
         <div className="w-16 h-16 bg-warning/10 border border-warning/20 text-warning rounded-2xl flex items-center justify-center mb-6 shadow-md animate-pulse">
@@ -1107,8 +1119,10 @@ function App() {
         setSeccionActual={handleNavChange}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
-        userProfile={userProfile}
+        userProfile={activeProfile}
         onLogout={handleLogout}
+        isPublicView={isPublicView}
+        onShowPublicLink={() => setShowPublicLinkModal(true)}
       />
 
       <div 
@@ -1128,6 +1142,8 @@ function App() {
           setFiltroFecha={setFiltroFecha}
           userProfile={userProfile}
           onLogout={handleLogout}
+          isPublicView={isPublicView}
+          onShowPublicLink={() => setShowPublicLinkModal(true)}
         />
 
         {/* Dynamic Section Renderer with Skeleton support */}
@@ -1147,8 +1163,8 @@ function App() {
               onToggleSelectFleje={handleToggleSelectFleje}
               dispatchCart={dispatchSession?.items || []}
               showToast={showToast}
-              catalogoCostos={catalogoCostos}
-              userProfile={userProfile}
+              userProfile={activeProfile}
+              isPublicView={isPublicView}
             />
           )}
 
@@ -1156,6 +1172,7 @@ function App() {
             <TorresView 
               torres={torres}
               inventario={inventarioMap}
+              catalogoCostos={catalogoCostos}
               searchQuery={searchQuery}
               isLoading={loadingTorres}
               onSelectTorre={setTorreActualId}
@@ -1169,7 +1186,7 @@ function App() {
             <HistorialView 
               historial={historial}
               activeSessions={activeSessions}
-              userProfile={userProfile}
+              userProfile={activeProfile}
               isLoading={loadingHistorial}
             />
           )}
@@ -1180,13 +1197,13 @@ function App() {
               inventario={inventarioMap}
               historial={historial}
               catalogoCostos={catalogoCostos}
-              userProfile={userProfile}
+              userProfile={activeProfile}
             />
           )}
 
           {seccionActual === 'config' && (
             <ConfigView 
-              userProfile={userProfile}
+              userProfile={activeProfile}
               onUpdateProfile={handleUpdateProfile}
               onLogout={handleLogout}
               showToast={showToast}
@@ -1195,14 +1212,14 @@ function App() {
 
           {seccionActual === 'transport' && (
             <TransportView 
-              userProfile={userProfile}
+              userProfile={activeProfile}
               showToast={showToast}
             />
           )}
 
           {seccionActual === 'users' && (
             <UsersView 
-              userProfile={userProfile}
+              userProfile={activeProfile}
               showToast={showToast}
             />
           )}
@@ -1254,7 +1271,7 @@ function App() {
           onAbrirTraslado={() => setTrasladoOpen(true)}
           catalogoCostos={catalogoCostos}
           catalogoProductos={catalogoProductos}
-          userProfile={userProfile}
+          userProfile={activeProfile}
         />
       )}
 
@@ -1264,7 +1281,7 @@ function App() {
           torreId={torreActualId}
           torres={torres}
           inventario={inventarioMap}
-          userProfile={userProfile}
+          userProfile={activeProfile}
           onClose={() => setTrasladoOpen(false)}
           onConfirm={handleConfirmarTraslado}
         />
@@ -1412,6 +1429,44 @@ function App() {
           torres={torres}
           onConfirm={handleConfirmSaveSession}
         />
+      )}
+
+      {/* ──────────────── MODALES ADICIONALES ──────────────── */}
+      
+      {showPublicLinkModal && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-surface border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-slideUp">
+            <div className="flex justify-between items-center p-4 border-b border-border/60">
+              <h3 className="text-lg font-black text-foreground flex items-center gap-2">
+                <LinkIcon className="w-5 h-5 text-accent" /> Enlace Público
+              </h3>
+              <button onClick={() => setShowPublicLinkModal(false)} className="text-text-muted hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              <p className="text-sm text-text-muted">Comparte este enlace para que cualquier persona pueda ver el estado del inventario en tiempo real, sin necesidad de iniciar sesión ni modificar datos.</p>
+              <div className="flex bg-bg rounded-xl border border-border p-1">
+                <input 
+                  type="text" 
+                  readOnly 
+                  value={window.location.origin + window.location.pathname + '?public=true'} 
+                  className="flex-1 bg-transparent px-3 text-sm font-mono text-foreground focus:outline-none min-w-0"
+                  onClick={(e) => e.target.select()}
+                />
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.origin + window.location.pathname + '?public=true')
+                    showToast('Enlace copiado al portapapeles', false)
+                  }}
+                  className="bg-accent hover:bg-accent-hover text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0"
+                >
+                  Copiar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
