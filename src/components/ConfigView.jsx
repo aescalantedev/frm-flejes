@@ -278,21 +278,27 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
   const handleExportBackup = async () => {
     setProcesandoExport(true)
     try {
-      const { data: dbTorres, error: errorTorres } = await supabase
-        .from('torres')
+      const { data: dbUbicaciones, error: errorUbicaciones } = await supabase
+        .from('ubicaciones')
         .select('*')
-      if (errorTorres) throw errorTorres
+      if (errorUbicaciones) throw errorUbicaciones
 
-      const { data: dbInventario, error: errorInv } = await supabase
-        .from('inventario')
+      const { data: dbProductos, error: errorProductos } = await supabase
+        .from('productos')
         .select('*')
-      if (errorInv) throw errorInv
+      if (errorProductos) throw errorProductos
+
+      const { data: dbFlejes, error: errorFlejes } = await supabase
+        .from('flejes')
+        .select('*')
+      if (errorFlejes) throw errorFlejes
 
       const backupData = {
         system: 'Sistema de Flejes v2.0',
         exportedAt: new Date().toISOString(),
-        torres: dbTorres || [],
-        inventario: dbInventario || []
+        ubicaciones: dbUbicaciones || [],
+        productos: dbProductos || [],
+        flejes: dbFlejes || []
       }
 
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2))
@@ -321,13 +327,13 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
       try {
         const json = JSON.parse(event.target.result)
         
-        if (json.system !== 'Sistema de Flejes v2.0' || !Array.isArray(json.inventario)) {
+        if (json.system !== 'Sistema de Flejes v2.0' || !Array.isArray(json.flejes)) {
           throw new Error('El archivo seleccionado no es un respaldo válido de este sistema.')
         }
 
         const confirmRestore = window.confirm(
           `⚠️ ADVERTENCIA DE RESTAURACIÓN:\n\n` +
-          `Este archivo contiene ${json.inventario.length} flejes del ${new Date(json.exportedAt).toLocaleString()}.\n` +
+          `Este archivo contiene ${json.flejes.length} flejes del ${new Date(json.exportedAt).toLocaleString()}.\n` +
           `Al restaurar, se ELIMINARÁ por completo el inventario actual de todas las torres y se reemplazará por el del archivo.\n\n` +
           `¿Estás seguro de que deseas proceder con la restauración de datos?`
         )
@@ -338,24 +344,28 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
 
         // a) Delete all current active inventory
         const { error: deleteError } = await supabase
-          .from('inventario')
+          .from('flejes')
           .delete()
           .neq('id', '00000000-0000-0000-0000-000000000000')
         
         if (deleteError) throw deleteError
 
         // b) Insert backed-up inventory
-        if (json.inventario.length > 0) {
-          const cleanItems = json.inventario.map(item => ({
+        if (json.flejes.length > 0) {
+          const cleanItems = json.flejes.map(item => ({
             id: item.id,
-            torre_id: item.torre_id,
+            producto_id: item.producto_id,
+            ubicacion_id: item.ubicacion_id,
             peso: item.peso,
-            secuencia: item.secuencia,
-            recepcion_id: item.recepcion_id
+            estado: item.estado,
+            movimiento_id: item.movimiento_id,
+            creado_por: item.creado_por,
+            created_at: item.created_at,
+            updated_at: item.updated_at
           }))
 
           const { error: insertError } = await supabase
-            .from('inventario')
+            .from('flejes')
             .insert(cleanItems)
 
           if (insertError) throw insertError

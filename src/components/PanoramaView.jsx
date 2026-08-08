@@ -36,6 +36,7 @@ export default function PanoramaView({
   userProfile,
   isPublicView
 }) {
+  const { isTN } = useUnitSystem()
   const [filtroEstado, setFiltroEstado] = useState('todas')
 
   // Observer para mostrar FABs solo al hacer scroll
@@ -180,8 +181,6 @@ export default function PanoramaView({
       statusClass
     }
   })
-
-  const { isTN } = useUnitSystem()
   
   const displayTotalPeso = isTN ? (pesoTotalAcumulado / 1000).toFixed(3) : pesoTotalAcumulado.toFixed(2)
   const displayTotalPesoLabel = isTN ? 't' : 'kg'
