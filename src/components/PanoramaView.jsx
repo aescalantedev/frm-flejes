@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Plus, Truck, Send, Check } from 'lucide-react'
+import { useUnitSystem } from '../hooks/useUnitSystem'
 
 // Utilidad para normalizar medidas ("284 X 2.0" -> "284X2") y asegurar que coincida con la DB
 const normalizeMedida = (m) => {
@@ -180,8 +181,7 @@ export default function PanoramaView({
     }
   })
 
-  const unitSystem = localStorage.getItem('unitSystem') || 'kg'
-  const isTN = unitSystem === 't'
+  const { isTN } = useUnitSystem()
   
   const displayTotalPeso = isTN ? (pesoTotalAcumulado / 1000).toFixed(3) : pesoTotalAcumulado.toFixed(2)
   const displayTotalPesoLabel = isTN ? 't' : 'kg'

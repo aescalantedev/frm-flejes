@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Search, RefreshCw, Plus, Calendar, X, LogOut, User, ArrowLeft, Shield, Database } from 'lucide-react'
+import { useUnitSystem } from '../hooks/useUnitSystem'
 
 export default function AppBar({ 
   seccionActual, 
@@ -20,6 +21,8 @@ export default function AppBar({
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef(null)
   const inputRef = useRef(null)
+  
+  const { unitSystem, toggleUnitSystem } = useUnitSystem()
 
   // Cerrar el popover del usuario al hacer clic fuera del menú
   useEffect(() => {
@@ -153,6 +156,28 @@ export default function AppBar({
                 <RefreshCw className="w-4 h-4" />
               </button>
             )}
+
+              {/* Toggle de Unidad (Kg / Tn) */}
+              <div className="flex items-center bg-surface border border-border rounded-xl p-0.5 shrink-0">
+                <button
+                  onClick={() => toggleUnitSystem('kg')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    unitSystem === 'kg' ? 'bg-accent text-white shadow-sm' : 'text-text-muted hover:text-foreground'
+                  }`}
+                  title="Mostrar en Kilogramos"
+                >
+                  KG
+                </button>
+                <button
+                  onClick={() => toggleUnitSystem('t')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    unitSystem === 't' ? 'bg-accent text-white shadow-sm' : 'text-text-muted hover:text-foreground'
+                  }`}
+                  title="Mostrar en Toneladas"
+                >
+                  TN
+                </button>
+              </div>
 
             {/* Crear Torre */}
             {seccionActual === 'torres' && (

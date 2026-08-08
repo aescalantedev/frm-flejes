@@ -18,6 +18,7 @@ import {
   ExternalLink,
   ImageIcon
 } from 'lucide-react'
+import { useUnitSystem } from '../hooks/useUnitSystem'
 
 // =========================================================================
 // COMPONENTE: Selector de Torres con Filtro de Búsqueda Integrado (Tailwind)
@@ -410,9 +411,7 @@ export default function HistorialView({ historial = [], activeSessions = [], use
   const [fechaFiltro, setFechaFiltro] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [activeTx, setActiveTx] = useState(null)
-  
-  const unitSystem = localStorage.getItem('unitSystem') || 'kg'
-  const isTN = unitSystem === 't'
+    const { isTN } = useUnitSystem()
 
   if (isLoading) {
     return (

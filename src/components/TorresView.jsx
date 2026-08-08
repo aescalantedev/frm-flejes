@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { ArrowUp, ArrowDown, Edit3, Trash2, FileSpreadsheet } from 'lucide-react'
 import { exportarTorresExcel } from '../lib/reportUtils'
+import { useUnitSystem } from '../hooks/useUnitSystem'
 
 export default function TorresView({ 
   torres, 
@@ -14,8 +15,7 @@ export default function TorresView({
   onMoverTorre 
 }) {
   const [filtroEstado, setFiltroEstado] = useState('todas')
-  const unitSystem = localStorage.getItem('unitSystem') || 'kg'
-  const isTN = unitSystem === 't'
+  const { isTN } = useUnitSystem()
 
   // RENDER SKELETON LOADER
   if (isLoading) {

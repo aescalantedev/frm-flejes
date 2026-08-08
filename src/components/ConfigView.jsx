@@ -3,6 +3,7 @@ import { User, Lock, Sliders, Database, Info, Paintbrush, Bell, Shield, HelpCirc
 import { themes, applyTheme } from '../lib/theme'
 import { supabase } from '../lib/supabase'
 import { useQueryClient } from '@tanstack/react-query'
+import { useUnitSystem } from '../hooks/useUnitSystem'
 
 export default function ConfigView({ userProfile, onUpdateProfile, onLogout, showToast }) {
   const queryClient = useQueryClient()
@@ -217,7 +218,7 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
   }
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('theme') || 'darkMinimal')
   const [soundAlerts, setSoundAlerts] = useState(() => localStorage.getItem('soundAlerts') === 'true')
-  const [unitSystem, setUnitSystem] = useState(() => localStorage.getItem('unitSystem') || 'kg')
+  const { unitSystem, toggleUnitSystem } = useUnitSystem()
 
   // Sync profile state when prop changes
   useEffect(() => {
@@ -387,8 +388,7 @@ export default function ConfigView({ userProfile, onUpdateProfile, onLogout, sho
   }
 
   const handleUnitChange = (val) => {
-    setUnitSystem(val)
-    localStorage.setItem('unitSystem', val)
+    toggleUnitSystem(val)
     showToast(`Unidad de medida cambiada a: ${val === 'kg' ? 'Kilogramos' : 'Toneladas'}`)
   }
 

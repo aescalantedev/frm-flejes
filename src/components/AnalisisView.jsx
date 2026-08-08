@@ -6,6 +6,7 @@ import {
   BarChart2, TrendingUp, Filter, SlidersHorizontal, Download, ArrowRightLeft
 } from "lucide-react"
 import { exportarInventarioExcel, exportarAnalisisExcel } from "../lib/reportUtils"
+import { useUnitSystem } from "../hooks/useUnitSystem"
 
 const normalizeMedida = (m) => {
   if (!m) return ""
@@ -32,8 +33,7 @@ const CHART_COLORS = [
 ]
 
 export default function AnalisisView({ torres = [], inventario = {}, historial = [], catalogoCostos = [], userProfile, isPublicView }) {
-  const unitSystem = localStorage.getItem("unitSystem") || "kg"
-  const isTN = unitSystem === "t"
+  const { unitSystem, isTN } = useUnitSystem()
   const [activeTab, setActiveTab] = useState("graficos")
   const [periodoMovimientos, setPeriodoMovimientos] = useState(30)
   const [topNTorres, setTopNTorres] = useState(10)
