@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { X, Plus, Trash2, ArrowRightLeft, Percent, Scale, Check, AlertTriangle, Edit3 } from 'lucide-react'
 import SearchableSelect from './SearchableSelect'
+import ReactECharts from 'echarts-for-react'
 
 // Utilidad para normalizar medidas ("284 X 2.0" -> "284X2") y asegurar que coincida con la DB
 const normalizeMedida = (m) => {
@@ -242,19 +243,114 @@ export default function DetailDrawer({
             </div>
           </div>
 
-          {/* Barra de progreso de ocupación */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs text-text-muted">
-              <span>Capacidad Ocupada</span>
-              <span className="font-mono">{porcentaje.toFixed(0)}%</span>
-            </div>
-            <div className="h-2.5 bg-bg rounded-full overflow-hidden border border-border/50">
-              <div 
-                className={`h-full rounded-full transition-all duration-500 ${getProgressColor(porcentaje)}`}
-                style={{ width: `${porcentaje}%` }}
-              />
-            </div>
-          </div>
+          {/* Gráfico Donut de Capacidad / Distribución */}
+          {(() => {
+            const grouped = {}
+            flejes.forEach(f => {
+              const m = f.medida || torre.nombre_medida || 'No asignada'
+              grouped[m] = (grouped[m] || 0) + 1
+            })
+
+            const isMixed = Object.keys(grouped).length > 1
+            let chartOptions = {}
+
+            if (isMixed) {
+              const huecosVacios = Math.max(0, cantidadMaxima - cantidadActual)
+              const data = Object.keys(grouped).map(m => ({ name: m, value: grouped[m] }))
+              if (huecosVacios > 0) {
+                data.push({ name: 'Disponible', value: huecosVacios, itemStyle: { color: '#2a2a35' } })
+              }
+              
+              chartOptions = {
+                tooltip: { trigger: 'item', formatter: '{b}: {c} flejes ({d}%)', backgroundColor: '#1a1b1e', textStyle: { color: '#e5e7eb', fontSize: 10, fontFamily: 'monospace' }, borderColor: '#2d2d3b', padding: [8, 12] },
+                series: [{
+                  type: 'pie',
+                  radius: ['45%', '75%'],
+                  center: ['50%', '50%'],
+                  avoidLabelOverlap: false,
+                  itemStyle: { borderRadius: 4, borderColor: '#18191f', borderWidth: 2 },
+                  label: { show: false },
+                  data: data,
+                  color: ['#f97316', '#3b82f6', '#10b981', '#8b5cf6', '#f43f5e', '#06b6d4']
+                }]
+              }
+            } else {
+              const huecosVacios = Math.max(0, cantidadMaxima - cantidadActual)
+              
+              let pctColor = '#f97316' // accent
+              if (porcentaje >= 100) pctColor = '#ef4444' // danger
+              else if (porcentaje >= 60) pctColor = '#f59e0b' // warning
+
+              chartOptions = {
+                tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', backgroundColor: '#1a1b1e', textStyle: { color: '#e5e7eb', fontSize: 10, fontFamily: 'monospace' }, borderColor: '#2d2d3b', padding: [8, 12] },
+                series: [{
+                  type: 'pie',
+                  radius: ['55%', '75%'],
+                  center: ['50%', '50%'],
+                  avoidLabelOverlap: false,
+                  itemStyle: { borderRadius: 4, borderColor: '#18191f', borderWidth: 2 },
+                  label: { show: false },
+                  data: [
+                    { value: cantidadActual, name: 'Ocupados', itemStyle: { color: pctColor } },
+                    { value: huecosVacios, name: 'Vacíos', itemStyle: { color: '#2a2a35' } }
+                  ]
+                }]
+              }
+            }
+
+            return (
+              <div className="bg-bg/40 border border-border/50 rounded-2xl p-4 flex items-center justify-between shadow-inner">
+                <div className="w-[120px] h-[100px] shrink-0">
+                  <ReactECharts option={chartOptions} style={{ height: '100%', width: '100%' }} />
+                </div>
+                <div className="flex-1 pl-4 flex flex-col justify-center gap-1.5 border-l border-border/30 ml-2">
+                  <div className="text-[10px] text-text-muted font-bold tracking-wide uppercase mb-1">
+                    {isMixed ? 'Distribución de Flejes' : 'Capacidad Ocupada'}
+                  </div>
+                  {isMixed ? (
+                    <>
+                      {Object.keys(grouped).map((m, idx) => {
+                        const colors = ['#f97316', '#3b82f6', '#10b981', '#8b5cf6', '#f43f5e', '#06b6d4']
+                        return (
+                          <div key={idx} className="flex items-center justify-between text-xs font-mono pr-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full shadow-xs" style={{ backgroundColor: colors[idx % colors.length] }} />
+                              <span>{m}</span>
+                            </div>
+                            <span className="font-bold text-foreground">{grouped[m]} <span className="text-[9px] text-text-muted/60">ud</span></span>
+                          </div>
+                        )
+                      })}
+                      <div className="flex items-center justify-between text-xs font-mono pr-2 mt-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#2a2a35] shadow-xs" />
+                          <span className="text-text-muted">Disponible</span>
+                        </div>
+                        <span className="font-bold text-text-muted">{Math.max(0, cantidadMaxima - cantidadActual)} <span className="text-[9px] text-text-muted/60">ud</span></span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between text-xs font-mono pr-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full shadow-xs" style={{ backgroundColor: porcentaje >= 100 ? '#ef4444' : porcentaje >= 60 ? '#f59e0b' : '#f97316' }} />
+                          <span>Ocupado</span>
+                        </div>
+                        <span className="font-bold text-foreground">{cantidadActual} <span className="text-[9px] text-text-muted/60">ud</span></span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs font-mono pr-2 mt-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#2a2a35] shadow-xs" />
+                          <span className="text-text-muted">Disponible</span>
+                        </div>
+                        <span className="font-bold text-text-muted">{Math.max(0, cantidadMaxima - cantidadActual)} <span className="text-[9px] text-text-muted/60">ud</span></span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Botones principales de acción */}
           <div className="flex gap-2">
