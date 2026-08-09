@@ -103,10 +103,22 @@ export default function PanoramaView({
 
   // 1. Filtrar torres primero según la query de búsqueda en el header
   const searchFiltered = searchQuery
-    ? torres.filter(t => 
-        t.posicion.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.nombre_medida.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? torres.filter(t => {
+        const sq = searchQuery.toLowerCase();
+        const matchTorre = t.posicion.toLowerCase().includes(sq) ||
+                           t.nombre_medida.toLowerCase().includes(sq);
+        
+        if (matchTorre) return true;
+
+        // Buscar también dentro de los flejes de la torre
+        const flejes = inventario[t.id] || [];
+        const matchFlejes = flejes.some(f => 
+          (f.medida && f.medida.toLowerCase().includes(sq)) ||
+          (f.codigo && f.codigo.toLowerCase().includes(sq))
+        );
+
+        return matchFlejes;
+      })
     : torres
 
   const selectedTorreIds = new Set(dispatchCart.map(item => item.torre_id).filter(Boolean))
@@ -292,6 +304,13 @@ export default function PanoramaView({
             const isFull = cantidadActual >= capMax
             const isDimmed = dispatchActive && isEmpty
 
+            // Torre Mixta: si algún fleje tiene medida diferente a la de la torre
+            const isMixedTower = flejes.some(f => {
+              const m = normalizeMedida(f.medida)
+              const tm = normalizeMedida(torre.nombre_medida)
+              return m && m !== tm
+            })
+
             // Lógica física: Solo se puede tomar el fleje libre más alto, o devolver el fleje seleccionado más bajo
             let highestUnselectedIdx = -1
             let lowestSelectedIdx = -1
@@ -322,7 +341,7 @@ export default function PanoramaView({
               
               if (isOccupied && fleje) {
                 const isSelected = dispatchActive && dispatchCart.some(item => item.id === fleje.id)
-                const canSelect = !dispatchActive || (itemIndex === highestUnselectedIdx || itemIndex === lowestSelectedIdx)
+                const canSelect = !dispatchActive || isMixedTower || (itemIndex === highestUnselectedIdx || itemIndex === lowestSelectedIdx)
                 const showDiffMeasure = fleje.medida && fleje.medida !== torre.nombre_medida
                 const costoFleje = fleje.peso * (parseFloat(fleje.costo_kg_ingreso) || 0)
 
@@ -593,14 +612,53 @@ export default function PanoramaView({
                 )}
 
                 {/* Pie de tarjeta con sumatoria de pesos */}
-                <div className="flex justify-between items-center pt-3 border-t border-border mt-auto">
-                  <span className="text-xs text-text-muted">Total Peso:</span>
-                  <span className="text-sm font-bold text-warning font-mono">{isTN ? (pesoTorre / 1000).toFixed(3) : pesoTorre.toFixed(2)} {isTN ? 't' : 'kg'}</span>
-                </div>
-                <div className="flex justify-between items-center pt-1.5 animate-fadeIn">
-                    <span className="text-[10px] text-text-muted font-bold tracking-wide uppercase">Valorizado:</span>
-                    <span className="text-xs font-bold text-accent font-mono">S/ {costoTotalTorre.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                    </div>
+                {(() => {
+                  const groupedTotals = {}
+                  flejes.forEach(f => {
+                    const m = f.medida || torre.nombre_medida || 'No asignada'
+                    if (!groupedTotals[m]) {
+                      groupedTotals[m] = { peso: 0, costo: 0 }
+                    }
+                    groupedTotals[m].peso += f.peso
+                    groupedTotals[m].costo += f.peso * (parseFloat(f.costo_kg_ingreso) || 0)
+                  })
+
+                  if (Object.keys(groupedTotals).length > 1) {
+                    return (
+                      <div className="pt-3 border-t border-border mt-auto flex flex-col gap-1.5">
+                        {Object.entries(groupedTotals).map(([medida, sumas], idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-bg/40 px-2 py-1 rounded">
+                            <span className="text-[10px] text-text-muted font-bold font-mono tracking-wider">{medida}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-accent font-mono w-[65px] text-right">S/ {sumas.costo.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+                              <span className="text-xs font-bold text-warning font-mono w-[55px] text-right">{isTN ? (sumas.peso / 1000).toFixed(3) : sumas.peso.toFixed(2)} {isTN ? 't' : 'kg'}</span>
+                            </div>
+                          </div>
+                        ))}
+                        <div className="flex justify-between items-center pt-2 mt-1 border-t border-border/40">
+                          <span className="text-[10px] text-text-muted font-bold uppercase tracking-wide">Total:</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-accent font-mono">S/ {costoTotalTorre.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            <span className="text-sm font-bold text-warning font-mono">{isTN ? (pesoTorre / 1000).toFixed(3) : pesoTorre.toFixed(2)} {isTN ? 't' : 'kg'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <>
+                      <div className="flex justify-between items-center pt-3 border-t border-border mt-auto">
+                        <span className="text-xs text-text-muted">Total Peso:</span>
+                        <span className="text-sm font-bold text-warning font-mono">{isTN ? (pesoTorre / 1000).toFixed(3) : pesoTorre.toFixed(2)} {isTN ? 't' : 'kg'}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1.5 animate-fadeIn">
+                          <span className="text-[10px] text-text-muted font-bold tracking-wide uppercase">Valorizado:</span>
+                          <span className="text-xs font-bold text-accent font-mono">S/ {costoTotalTorre.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
             )
           })}

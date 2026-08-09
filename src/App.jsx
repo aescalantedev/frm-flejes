@@ -1198,6 +1198,7 @@ function App() {
               historial={historial}
               catalogoCostos={catalogoCostos}
               userProfile={activeProfile}
+              isPublicView={isPublicView}
             />
           )}
 
