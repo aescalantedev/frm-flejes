@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Plus, Truck, Send, Check } from 'lucide-react'
+import { Plus, Truck, Send, Check, Box, Grid } from 'lucide-react'
 import { useUnitSystem } from '../hooks/useUnitSystem'
+import Panorama3D from './Panorama3D'
 
 // Utilidad para normalizar medidas ("284 X 2.0" -> "284X2") y asegurar que coincida con la DB
 const normalizeMedida = (m) => {
@@ -38,6 +39,7 @@ export default function PanoramaView({
 }) {
   const { isTN } = useUnitSystem()
   const [filtroEstado, setFiltroEstado] = useState('todas')
+  const [viewMode, setViewMode] = useState('2d')
 
   // Observer para mostrar FABs solo al hacer scroll
   const topButtonsRef = useRef(null)
@@ -205,6 +207,56 @@ export default function PanoramaView({
     { label: 'Capacidad Promedio', value: `${capacidadPromedio}%`, color: 'text-info' }
   ]
 
+  if (viewMode === '3d') {
+    return (
+      <div className="relative w-full h-[calc(100vh-120px)] flex flex-col animate-fadeIn">
+        <Panorama3D 
+          torres={searchFiltered}
+          inventario={inventario}
+          onSelectTorre={onSelectTorre}
+          filtroEstado={filtroEstado}
+          setFiltroEstado={setFiltroEstado}
+          stats={{
+            totalTorres,
+            totalFlejes,
+            pesoFmt: `${displayTotalPeso} ${displayTotalPesoLabel}`,
+            capacidadPromedio: `${capacidadPromedio}%`
+          }}
+        />
+        
+        {/* Botón flotante para regresar al modo tarjetas */}
+        <div className="absolute top-20 left-4 z-20">
+          <button
+            onClick={() => setViewMode('2d')}
+            className="flex items-center gap-2 bg-surface/90 backdrop-blur border border-border/50 px-4 py-2 rounded-xl text-xs font-bold text-text-muted hover:text-foreground hover:bg-surface-hover shadow-lg transition-all"
+          >
+            <Grid className="w-4 h-4" /> Volver a Tarjetas
+          </button>
+        </div>
+
+        {/* Floating Action Buttons para Recepción/Despacho */}
+        {!isPublicView && !receptionActive && !dispatchActive && (
+          <div className="absolute bottom-6 right-6 z-20 flex flex-col gap-3">
+            <button 
+              onClick={onStartReception} 
+              className="w-14 h-14 bg-accent text-[#171b1d] rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border border-accent/20 group" 
+              title="Recepción de Camión"
+            >
+              <Truck className="w-6 h-6 group-hover:animate-bounce" />
+            </button>
+            <button 
+              onClick={onStartDispatch} 
+              className="w-14 h-14 bg-warning text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border border-warning/20 group" 
+              title="Despacho de Material"
+            >
+              <Send className="w-6 h-6 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       
@@ -255,49 +307,67 @@ export default function PanoramaView({
         </div>
       )}
 
-      {/* Filtros Rápidos en Chips */}
-      <div className="flex flex-wrap gap-2 pb-2">
-        {[
-          { id: 'todas', label: 'Todas', count: counts.todas },
-          { id: 'llenas', label: 'Llenas', count: counts.llenas },
-          { id: 'parciales', label: 'Parciales', count: counts.parciales },
-          { id: 'vacias', label: 'Vacías', count: counts.vacias },
-          ...(dispatchActive ? [{ id: 'seleccionados', label: 'Por Despachar', count: counts.seleccionados }] : [])
-        ].map(chip => {
-          const isSelected = filtroEstado === chip.id
-          return (
-            <button
-              key={chip.id}
-              onClick={() => setFiltroEstado(chip.id)}
-              className={`
-                px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all border cursor-pointer flex items-center gap-2
-                ${isSelected 
-                  ? 'bg-accent/15 border-accent/40 text-accent font-bold shadow-xs' 
-                  : 'bg-surface border-border text-text-muted hover:bg-surface-hover hover:text-foreground'
-                }
-              `}
-            >
-              <span>{chip.label}</span>
-              <span className={`
-                text-[9px] font-bold px-2 py-0.5 rounded-full font-mono transition-colors
-                ${isSelected ? 'bg-accent text-white' : 'bg-bg text-text-muted'}
-              `}>
-                {chip.count}
-              </span>
-            </button>
-          )
-        })}
+      {/* Filtros Rápidos en Chips y Toggle 3D */}
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-border/40 mb-2">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: 'todas', label: 'Todas', count: counts.todas },
+            { id: 'llenas', label: 'Llenas', count: counts.llenas },
+            { id: 'parciales', label: 'Parciales', count: counts.parciales },
+            { id: 'vacias', label: 'Vacías', count: counts.vacias },
+            ...(dispatchActive ? [{ id: 'seleccionados', label: 'Por Despachar', count: counts.seleccionados }] : [])
+          ].map(chip => {
+            const isSelected = filtroEstado === chip.id
+            return (
+              <button
+                key={chip.id}
+                onClick={() => setFiltroEstado(chip.id)}
+                className={`
+                  px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all border cursor-pointer flex items-center gap-2
+                  ${isSelected 
+                    ? 'bg-accent/15 border-accent/40 text-accent font-bold shadow-xs' 
+                    : 'bg-surface border-border text-text-muted hover:bg-surface-hover hover:text-foreground'
+                  }
+                `}
+              >
+                <span>{chip.label}</span>
+                <span className={`
+                  text-[9px] font-bold px-2 py-0.5 rounded-full font-mono transition-colors
+                  ${isSelected ? 'bg-accent text-white' : 'bg-bg text-text-muted'}
+                `}>
+                  {chip.count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Toggle 3D solo en escritorio */}
+        <div className="hidden md:flex items-center bg-surface border border-border p-1 rounded-xl shadow-xs">
+          <button
+            onClick={() => setViewMode('2d')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === '2d' ? 'bg-bg text-foreground shadow-sm' : 'text-text-muted hover:text-foreground'}`}
+          >
+            <Grid className="w-4 h-4" /> Tarjetas
+          </button>
+          <button
+            onClick={() => setViewMode('3d')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === '3d' ? 'bg-bg text-accent shadow-sm' : 'text-text-muted hover:text-foreground'}`}
+          >
+            <Box className="w-4 h-4" /> Almacén 3D
+          </button>
+        </div>
       </div>
 
       {/* Grid de Torres */}
-      {torresData.length === 0 ? (
-        <div className="bg-surface border border-border rounded-2xl p-16 text-center text-text-muted italic">
-          {searchQuery || filtroEstado !== 'todas' 
-            ? 'No hay torres coincidentes con los filtros aplicados.' 
-            : 'No hay torres registradas en el sistema.'}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {torresData.length === 0 ? (
+          <div className="bg-surface border border-border rounded-2xl p-16 text-center text-text-muted italic">
+            {searchQuery || filtroEstado !== 'todas' 
+              ? 'No hay torres coincidentes con los filtros aplicados.' 
+              : 'No hay torres registradas en el sistema.'}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 animate-fadeIn">
           {torresData.map(({ torre, flejes, cantidadActual, capMax, pesoTorre, costoTotalTorre, porcentaje, statusText, statusClass }) => {
             
             const isEmpty = cantidadActual === 0
