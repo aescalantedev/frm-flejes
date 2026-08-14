@@ -216,6 +216,7 @@ export default function PanoramaView({
           onSelectTorre={onSelectTorre}
           filtroEstado={filtroEstado}
           setFiltroEstado={setFiltroEstado}
+          catalogoCostos={catalogoCostos}
           stats={{
             totalTorres,
             totalFlejes,

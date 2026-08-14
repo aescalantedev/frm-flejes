@@ -234,9 +234,18 @@ export default function DetailDrawer({
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-2xl font-bold text-accent tracking-tight">{torre.posicion}</h3>
-              <p className="text-sm text-text-muted mt-1">{torre.nombre_medida}</p>
+              <div className="mt-1">
+                <span className="text-sm font-bold text-foreground mr-2">{torre.nombre_medida}</span>
+                {(() => {
+                  const cat = catalogoCostos.find(c => c.medida_corta === torre.nombre_medida || c.medida === torre.nombre_medida)
+                  const finalGlosa = torre.glosa_medida || (cat ? cat.glosa : null)
+                  return finalGlosa ? (
+                    <span className="text-xs text-text-muted italic block mt-0.5">{finalGlosa}</span>
+                  ) : null
+                })()}
+              </div>
             </div>
-            <div className="text-right bg-bg border border-border rounded-xl px-4 py-2 font-mono">
+            <div className="text-right bg-bg border border-border rounded-xl px-4 py-2 font-mono shrink-0 ml-4">
               <span className="text-[10px] text-text-muted block uppercase font-sans font-medium">Flejes</span>
               <span className="text-lg font-bold text-accent">{cantidadActual}</span>
               <span className="text-text-muted"> / {cantidadMaxima}</span>

@@ -17,10 +17,12 @@ const normalizeMedida = (m) => {
   return s;
 };
 
-export default function Panorama3D({ torres, inventario, onSelectTorre, stats, filtroEstado, setFiltroEstado }) {
+export default function Panorama3D({ torres, inventario, onSelectTorre, stats, filtroEstado, setFiltroEstado, catalogoCostos = [] }) {
   const mountRef = useRef(null);
   const engineRef = useRef(null);
   const [activeView, setActiveView] = useState('iso');
+  const [focusedTowerData, setFocusedTowerData] = useState(null);
+  const [focusedFlejeData, setFocusedFlejeData] = useState(null);
   
   const colors = { disponible: 0x6fb889, parcial: 0xd3aa28, ocupada: 0x6d93a3, sobrestock: 0xb95d5d };
 
@@ -169,11 +171,13 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
     geoRollo.center();
     geoRollo.rotateX(Math.PI / 2);
     const geoCarton = new THREE.CylinderGeometry(radioInterior, radioInterior, alturaRollo + 0.02, 32);
+    const geoCartonTapa = new THREE.CylinderGeometry(radioExterior + 0.05, radioExterior + 0.05, 0.08, 32);
     
-    const metalBase = new THREE.MeshStandardMaterial({ color: 0x3f4547, roughness: 0.58, metalness: 0.78 });
-    const metalTop = new THREE.MeshStandardMaterial({ color: 0x777d7d, roughness: 0.48, metalness: 0.68 });
-    const metalMixed = new THREE.MeshStandardMaterial({ color: 0xb57053, roughness: 0.58, metalness: 0.78 });
-    const palletMat = new THREE.MeshStandardMaterial({ color: 0x8a5c2e, roughness: 0.9, metalness: 0 });
+    const metalBase = new THREE.MeshStandardMaterial({ color: 0x3f4547, roughness: 0.58, metalness: 0.78, transparent: true });
+    const metalTop = new THREE.MeshStandardMaterial({ color: 0x777d7d, roughness: 0.48, metalness: 0.68, transparent: true });
+    const metalMixed = new THREE.MeshStandardMaterial({ color: 0xb57053, roughness: 0.58, metalness: 0.78, transparent: true });
+    const palletMat = new THREE.MeshStandardMaterial({ color: 0x8a5c2e, roughness: 0.9, metalness: 0, transparent: true });
+    const matCarton = new THREE.MeshStandardMaterial({ color: 0xab8663, roughness: 1.0, metalness: 0, transparent: true });
 
     const makeLabelTexture = (id) => {
       const c = document.createElement('canvas');
@@ -190,6 +194,52 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
       ctx.textBaseline = 'middle';
       ctx.fillText(id, 128, 48);
       return new THREE.CanvasTexture(c);
+    };
+
+    const makeTopCartonTexture = (text, isMixed = false) => {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ab8663';
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = isMixed ? '#b57053' : '#171b1d';
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.arc(128, 128, 123, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.translate(128, 128);
+      ctx.fillStyle = '#171b1d';
+      ctx.font = '900 48px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 0, isMixed ? -20 : 0);
+      if (isMixed) {
+          ctx.font = '900 28px monospace';
+          ctx.fillStyle = '#b57053';
+          ctx.fillText('MIXTO', 0, 25);
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    };
+
+    const makeSideTexture = (text) => {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 64;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#b57053';
+        ctx.fillRect(0, 0, 512, 64);
+        ctx.fillStyle = '#171b1d';
+        ctx.font = '900 36px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${text}  -  ${text}  -  ${text}`, 256, 32);
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(2, 1);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
     };
 
     // --- OPERARIO ---
@@ -250,8 +300,8 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         const next = engine.avatarPath[1];
         const dir = new THREE.Vector3().subVectors(next, avatar.position);
         const dist = dir.length();
-        const speed = 0.34;
-        if (dist < 0.35) {
+        const speed = 0.75;
+        if (dist < 0.8) {
           avatar.position.copy(next);
           engine.avatarPath.shift();
           if (engine.avatarPath.length < 2) engine.avatarMoving = false;
@@ -260,27 +310,38 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         dir.normalize();
         avatar.position.addScaledVector(dir, speed);
         avatar.rotation.y = Math.atan2(dir.x, dir.z);
-      },
-
-      clearSelection: () => {
-        if (engine.selectedTowerId && engine.allTowers[engine.selectedTowerId]) {
-          const t = engine.allTowers[engine.selectedTowerId];
-          if(t.labelElement) t.labelElement.classList.remove('selected');
-          if(t.labelObject) t.labelObject.visible = false;
-          if(t.floorId) t.floorId.material.color.set(0xffffff);
-          if(t.floorId) t.floorId.scale.set(1, 1, 1);
+      },      clearSelection: () => {
+        setFocusedTowerData(null);
+        setFocusedFlejeData(null);
+        if (engine.selectedTowerId) {
+            const t = engine.allTowers[engine.selectedTowerId];
+            if (t) {
+                if (t.labelElement) t.labelElement.classList.remove('selected');
+                if (t.labelObject && engine.selectedTowerId !== engine.hoveredTowerId) t.labelObject.visible = false;
+                if (t.floorId) {
+                    t.floorId.material.color.setHex(0xaaaaaa);
+                    t.floorId.scale.set(1, 1, 1);
+                }
+            }
         }
         engine.selectedTowerId = null;
         if (engine.selectedFlejeMesh) {
           engine.selectedFlejeMesh.material = metalBase.clone();
           engine.selectedFlejeMesh = null;
         }
+        // Restaurar atenuación
+        if (engine.lastCapMaxMap && engine.lastFiltro) {
+            engine.updateBaseColors(engine.lastCapMaxMap, engine.lastFiltro);
+        }
       },
 
       selectTower: (id, focus = true) => {
         const t = engine.allTowers[id];
         if (!t) return;
-        engine.clearSelection();
+        
+        const isAlreadySelected = (engine.selectedTowerId === id);
+        
+        engine.clearSelection(); 
         engine.selectedTowerId = id;
         
         if (t.labelElement) t.labelElement.classList.add('selected');
@@ -290,15 +351,35 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
             t.floorId.scale.set(1.08, 1.08, 1.08);
         }
         
-        // Trigger React UI Callback
-        if (onSelectTorre) onSelectTorre(id);
-        
         // Caminar
         engine.walkTo(t.x, t.z, id);
+        
+        // Atenuar las demás torres
+        if (engine.lastCapMaxMap && engine.lastFiltro) {
+            engine.updateBaseColors(engine.lastCapMaxMap, engine.lastFiltro);
+        }
 
         if (focus) {
-          gsap.to(camera.position, { x: t.x - 28, y: 25, z: t.z + 34, duration: 0.8, ease: 'power2.inOut' });
-          gsap.to(controls.target, { x: t.x, y: 3, z: t.z, duration: 0.8, ease: 'power2.inOut' });
+          if (isAlreadySelected) {
+              // Ya estamos enfocados en esta torre, solo refrescar HUD sin re-animar
+              const tData = torres.find(tw => tw.id === id);
+              setFocusedTowerData(tData || null);
+          } else {
+              // Cámara desplazada a la derecha para que la torre quede a la izquierda, libre de la ventana
+              gsap.to(camera.position, { x: t.x + 12, y: 15, z: t.z + 32, duration: 1.0, ease: 'power3.inOut' });
+              gsap.to(controls.target, { 
+                x: t.x + 12, y: 10, z: t.z, 
+                duration: 1.0, 
+                ease: 'power3.inOut',
+                onComplete: () => {
+                    const tData = torres.find(tw => tw.id === id);
+                    setFocusedTowerData(tData || null);
+                }
+              });
+          }
+        } else {
+            const tData = torres.find(tw => tw.id === id);
+            setFocusedTowerData(tData || null);
         }
       },
       
@@ -381,7 +462,20 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         label.visible = false;
         scene.add(label);
         
-        engine.allTowers[id] = { id, x, z, stack: [], baseMesh: base, labelElement: labelDiv, labelObject: label, floorId: idFloor };
+        const topTex = makeTopCartonTexture(tData.nombre_medida, false);
+        const topMat = new THREE.MeshStandardMaterial({ map: topTex, roughness: 1.0, metalness: 0, transparent: true });
+        const localMatCarton = matCarton.clone();
+        const tapaMesh = new THREE.Mesh(geoCartonTapa, [localMatCarton, topMat, localMatCarton]);
+        tapaMesh.castShadow = true;
+        tapaMesh.receiveShadow = true;
+        tapaMesh.visible = false;
+        scene.add(tapaMesh);
+        
+        engine.allTowers[id] = { 
+            id, x, z, stack: [], baseMesh: base, 
+            labelElement: labelDiv, labelObject: label, floorId: idFloor,
+            tapaMesh, topMat, nombre_medida: tData.nombre_medida, isMixed: false
+        };
       },
       addFleje: (torreId, flejeData, capMax) => {
         const t = engine.allTowers[torreId];
@@ -393,16 +487,34 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         const m2 = tData ? normalizeMedida(tData.nombre_medida) : '';
         const isMixed = m1 && m2 && m1 !== m2;
         
-        const metal = new THREE.Mesh(geoRollo, isMixed ? metalMixed.clone() : metalBase.clone());
+        let metalMats;
+        if (isMixed) {
+            const topM = metalMixed.clone();
+            const sideM = new THREE.MeshStandardMaterial({ map: makeSideTexture(flejeData.medida), roughness: 0.58, metalness: 0.78, transparent: true });
+            metalMats = [topM, sideM];
+        } else {
+            metalMats = metalBase.clone();
+        }
+        
+        const metal = new THREE.Mesh(geoRollo, metalMats);
         metal.castShadow = true; metal.receiveShadow = true;
         const center = new THREE.Mesh(geoCarton, metalTop.clone());
         center.castShadow = true;
         g.add(metal, center);
         
+        if (isMixed) {
+            const separador = new THREE.Mesh(geoCartonTapa, matCarton.clone());
+            separador.position.y = -0.6; // Base del fleje
+            separador.receiveShadow = true;
+            g.add(separador);
+        }
+        
+        g.userData.isMixed = isMixed;
         const i = t.stack.length;
         const y = 0.72 + i * 1.25;
         g.position.set(t.x, y, t.z);
-        metal.userData = { ...flejeData, torreId, esMetal: true };
+        const costoValorizado = flejeData.peso * (parseFloat(flejeData.costo_kg_ingreso) || 0);
+        metal.userData = { ...flejeData, torreId, esMetal: true, numero: i + 1, costoValorizado };
         g.userData.torreId = torreId;
         
         t.stack.push(g);
@@ -410,6 +522,9 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         engine.allFlejes.push(metal);
       },
       updateBaseColors: (capMaxMap, filtro = 'todas') => {
+          engine.lastCapMaxMap = capMaxMap;
+          engine.lastFiltro = filtro;
+          
           Object.values(engine.allTowers).forEach(t => {
               const capMax = capMaxMap[t.id] || 5;
               const n = t.stack.length;
@@ -423,6 +538,11 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
               if (filtro && filtro !== 'todas') {
                  if (filtro === 'llenas') isVisible = (tipo === 'llenas' || tipo === 'sobre');
                  else isVisible = (tipo === filtro);
+              }
+              
+              // Atenuar todo si hay una torre seleccionada y no es esta
+              if (engine.selectedTowerId && engine.selectedTowerId !== t.id) {
+                  isVisible = false;
               }
               
               if (isVisible) {
@@ -439,10 +559,36 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
               t.stack.forEach(g => { 
                   g.visible = true; 
                   g.children.forEach(mesh => {
-                      mesh.material.transparent = !isVisible;
-                      mesh.material.opacity = isVisible ? 1.0 : 0.15;
+                      if (mesh.isMesh) {
+                          if (Array.isArray(mesh.material)) {
+                              mesh.material.forEach(m => { m.opacity = isVisible ? 1.0 : 0.15; });
+                          } else {
+                              mesh.material.opacity = isVisible ? 1.0 : 0.15;
+                          }
+                      }
                   });
               });
+              
+              if (n > 0) {
+                  const topY = 0.72 + (n - 1) * 1.25 + 0.65;
+                  t.tapaMesh.position.set(t.x, topY, t.z);
+              } else {
+                  t.tapaMesh.position.set(t.x, 0.4, t.z); // Sobre el pallet
+              }
+              
+              t.tapaMesh.visible = true;
+              t.tapaMesh.material.forEach(m => {
+                  m.opacity = isVisible ? 1.0 : 0.15;
+              });
+              
+              const hasMixed = t.stack.some(g => g.userData.isMixed);
+              if (t.isMixed !== hasMixed) {
+                  t.isMixed = hasMixed;
+                  if (t.topMat.map) t.topMat.map.dispose();
+                  t.topMat.map = makeTopCartonTexture(t.nombre_medida, hasMixed);
+                  t.topMat.needsUpdate = true;
+              }
+              
               if (t.floorId) t.floorId.visible = true;
               if (t.labelObject && engine.selectedTowerId !== t.id) t.labelObject.visible = false;
           });
@@ -499,9 +645,10 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
       
       const hitFleje = raycaster.intersectObjects(engine.allFlejes)[0];
       if (hitFleje && hitFleje.object.userData.torreId) {
-        engine.selectTower(hitFleje.object.userData.torreId, false);
+        engine.selectTower(hitFleje.object.userData.torreId, true);
         engine.selectedFlejeMesh = hitFleje.object;
-        hitFleje.object.material = new THREE.MeshStandardMaterial({ color: 0xc4a029, roughness: 0.5, metalness: 0.7 });
+        hitFleje.object.material = new THREE.MeshStandardMaterial({ color: 0xc4a029, roughness: 0.5, metalness: 0.7, transparent: true });
+        setFocusedFlejeData(hitFleje.object.userData);
         return;
       }
       
@@ -646,6 +793,115 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
            <p className="text-[9px] font-bold text-text-muted uppercase tracking-[0.1em]">Gemelo Digital</p>
          </div>
       </div>
+
+      {/* Ventana HUD Digital para la Torre Enfocada */}
+      {focusedTowerData && (
+        <div className="absolute right-8 top-1/2 -translate-y-[55%] z-20 w-[360px] bg-surface/50 backdrop-blur-xl border border-border/40 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] overflow-hidden animate-slideUp">
+          <div className="px-6 py-4 border-b border-border/30 flex justify-between items-center bg-bg/30">
+            <h3 className="text-2xl font-black text-foreground tracking-tight">{focusedTowerData.posicion}</h3>
+            <button 
+              onClick={() => {
+                engineRef.current?.clearSelection();
+                engineRef.current?.setView('iso');
+              }}
+              className="text-foreground hover:text-white hover:bg-danger/80 transition-colors rounded-full w-8 h-8 flex items-center justify-center cursor-pointer bg-bg/50 border border-border/50 shadow-sm font-bold"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="p-6 space-y-5">
+            <div className="text-center">
+              <p className="text-xs text-text-muted font-black uppercase tracking-[0.15em] mb-1">Medida General</p>
+              <div className="flex items-center justify-center gap-3">
+                <span className="text-4xl font-black text-accent font-mono leading-none drop-shadow-sm">{focusedTowerData.nombre_medida}</span>
+                {(() => {
+                  const flejes = inventario[focusedTowerData.id] || [];
+                  const isMixed = flejes.some(f => normalizeMedida(f.medida) && normalizeMedida(f.medida) !== normalizeMedida(focusedTowerData.nombre_medida));
+                  if (isMixed) return <span className="bg-danger/20 text-danger border border-danger/40 text-xs font-bold px-2 py-1 rounded-md uppercase animate-pulse shadow-sm">Mixta</span>;
+                  return null;
+                })()}
+              </div>
+            </div>
+            
+            <div className="bg-bg/40 p-3 rounded-2xl border border-border/40 text-center shadow-inner">
+              <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest mb-1">Nombre Completo (Catálogo)</p>
+              {(() => {
+                  const cat = catalogoCostos.find(c => c.medida_corta === focusedTowerData.nombre_medida || c.medida === focusedTowerData.nombre_medida);
+                  const finalGlosa = focusedTowerData.glosa_medida || (cat ? cat.glosa : null);
+                  return finalGlosa ? (
+                    <p className="text-sm font-bold text-foreground leading-snug tracking-tight">{finalGlosa}</p>
+                  ) : (
+                    <p className="text-xs text-text-muted italic">No disponible en catálogo</p>
+                  );
+              })()}
+            </div>
+
+            {/* Información del Fleje Seleccionado */}
+            {focusedFlejeData && (
+              <div className="bg-accent/10 border-2 border-accent/30 p-4 rounded-2xl shadow-inner mt-2 animate-fadeIn">
+                <p className="text-[10px] text-accent font-black uppercase tracking-widest mb-2 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
+                  Fleje Seleccionado
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Número</p>
+                    <p className="text-sm font-bold text-foreground font-mono">#{focusedFlejeData.numero || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Peso</p>
+                    <p className="text-sm font-bold text-foreground font-mono">{focusedFlejeData.peso ? focusedFlejeData.peso.toFixed(2) : '0'} kg</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Medida Específica</p>
+                    <p className="text-sm font-bold text-foreground font-mono truncate">{focusedFlejeData.medida || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Costo Valorizado</p>
+                    <p className="text-sm font-bold text-foreground font-mono truncate">
+                      S/ {focusedFlejeData.costoValorizado ? focusedFlejeData.costoValorizado.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button 
+              onClick={() => {
+                if (onSelectTorre) onSelectTorre(focusedTowerData.id);
+              }}
+              className="w-full bg-accent hover:bg-accent-hover text-[#171b1d] font-black text-sm py-3 rounded-xl shadow-lg shadow-accent/20 transition-all active:scale-95 flex items-center justify-center cursor-pointer uppercase tracking-wide"
+            >
+              Ver Detalle Completo
+            </button>
+
+            {/* Navegación Anterior/Siguiente */}
+            <div className="flex gap-3 pt-2">
+              {(() => {
+                const currentIndex = torres.findIndex(tw => tw.id === focusedTowerData.id);
+                const prevTower = currentIndex > 0 ? torres[currentIndex - 1] : torres[torres.length - 1];
+                const nextTower = currentIndex < torres.length - 1 ? torres[currentIndex + 1] : torres[0];
+                return (
+                  <>
+                    <button 
+                      onClick={() => engineRef.current?.selectTower(prevTower.id, true)} 
+                      className="flex-1 bg-bg/50 border border-border py-2 rounded-xl text-text-muted hover:text-foreground font-bold hover:bg-surface-hover text-xs transition-colors flex justify-center items-center gap-1 cursor-pointer"
+                    >
+                      <span>«</span> {prevTower.posicion}
+                    </button>
+                    <button 
+                      onClick={() => engineRef.current?.selectTower(nextTower.id, true)} 
+                      className="flex-1 bg-bg/50 border border-border py-2 rounded-xl text-text-muted hover:text-foreground font-bold hover:bg-surface-hover text-xs transition-colors flex justify-center items-center gap-1 cursor-pointer"
+                    >
+                      {nextTower.posicion} <span>»</span>
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="absolute bottom-4 left-4 z-10 flex gap-2 bg-surface/90 backdrop-blur-md px-3 py-2 rounded-xl border border-border/50 shadow-lg">
          {filtroEstado !== 'todas' && (
