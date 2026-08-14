@@ -354,7 +354,7 @@ export default function PanoramaView({
             onClick={() => setViewMode('3d')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === '3d' ? 'bg-bg text-accent shadow-sm' : 'text-text-muted hover:text-foreground'}`}
           >
-            <Box className="w-4 h-4" /> Almacén 3D
+            <Box className="w-4 h-4" /> Vista 3D
           </button>
         </div>
       </div>

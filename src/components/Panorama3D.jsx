@@ -5,6 +5,18 @@ import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRe
 import gsap from 'gsap';
 import { Maximize, Minimize, Map, Info, Box } from 'lucide-react';
 
+const normalizeMedida = (m) => {
+  if (!m) return '';
+  const s = m.replace(/\s+/g, '').toUpperCase();
+  const parts = s.split('X');
+  if (parts.length === 2) {
+    const w = parseFloat(parts[0]);
+    const h = parseFloat(parts[1]);
+    if (!isNaN(w) && !isNaN(h)) return `${w}X${h}`;
+  }
+  return s;
+};
+
 export default function Panorama3D({ torres, inventario, onSelectTorre, stats, filtroEstado, setFiltroEstado }) {
   const mountRef = useRef(null);
   const engineRef = useRef(null);
@@ -160,6 +172,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
     
     const metalBase = new THREE.MeshStandardMaterial({ color: 0x3f4547, roughness: 0.58, metalness: 0.78 });
     const metalTop = new THREE.MeshStandardMaterial({ color: 0x777d7d, roughness: 0.48, metalness: 0.68 });
+    const metalMixed = new THREE.MeshStandardMaterial({ color: 0xb57053, roughness: 0.58, metalness: 0.78 });
     const palletMat = new THREE.MeshStandardMaterial({ color: 0x8a5c2e, roughness: 0.9, metalness: 0 });
 
     const makeLabelTexture = (id) => {
@@ -216,14 +229,19 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         const target = new THREE.Vector3(x, 0.05, z + 8);
         const start = avatar.position.clone();
         
-        // Pasillo seguro a la izquierda de todas las torres
-        const safeX = -102;
-        engine.avatarPath = [
-            start.clone(),
-            new THREE.Vector3(safeX, 0.05, start.z),
-            new THREE.Vector3(safeX, 0.05, target.z),
-            target.clone()
-        ];
+        if (Math.abs(start.z - target.z) < 1.0) {
+            // Misma fila, ir directo
+            engine.avatarPath = [start, target.clone()];
+        } else {
+            // Usar el pasillo/espacio a la derecha de la torre destino
+            const gapX = target.x + 6.5; 
+            engine.avatarPath = [
+                start.clone(),
+                new THREE.Vector3(gapX, 0.05, start.z),
+                new THREE.Vector3(gapX, 0.05, target.z),
+                target.clone()
+            ];
+        }
         engine.avatarMoving = true;
       },
       
@@ -369,9 +387,15 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         const t = engine.allTowers[torreId];
         if (!t) return;
         const g = new THREE.Group();
-        const metal = new THREE.Mesh(geoRollo, metalBase.clone());
+        
+        const tData = torres.find(tw => tw.id === torreId);
+        const m1 = normalizeMedida(flejeData.medida);
+        const m2 = tData ? normalizeMedida(tData.nombre_medida) : '';
+        const isMixed = m1 && m2 && m1 !== m2;
+        
+        const metal = new THREE.Mesh(geoRollo, isMixed ? metalMixed.clone() : metalBase.clone());
         metal.castShadow = true; metal.receiveShadow = true;
-        const center = new THREE.Mesh(geoCarton, metalTop);
+        const center = new THREE.Mesh(geoCarton, metalTop.clone());
         center.castShadow = true;
         g.add(metal, center);
         
@@ -395,17 +419,31 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
               else if (n === capMax) { c = colors.ocupada; tipo = 'llenas'; }
               else if (n > 0) { c = colors.parcial; tipo = 'parciales'; }
               
-              t.baseMesh.material.color.setHex(c);
-
               let isVisible = true;
               if (filtro && filtro !== 'todas') {
                  if (filtro === 'llenas') isVisible = (tipo === 'llenas' || tipo === 'sobre');
                  else isVisible = (tipo === filtro);
               }
               
-              t.baseMesh.visible = isVisible;
-              t.stack.forEach(g => { g.visible = isVisible; });
-              if (t.floorId) t.floorId.visible = isVisible;
+              if (isVisible) {
+                  t.baseMesh.material.color.setHex(c);
+                  t.baseMesh.material.opacity = 0.4;
+                  if (t.floorId) t.floorId.material.opacity = 1.0;
+              } else {
+                  t.baseMesh.material.color.setHex(0xaaaaaa);
+                  t.baseMesh.material.opacity = 0.08;
+                  if (t.floorId) t.floorId.material.opacity = 0.3;
+              }
+              
+              t.baseMesh.visible = true;
+              t.stack.forEach(g => { 
+                  g.visible = true; 
+                  g.children.forEach(mesh => {
+                      mesh.material.transparent = !isVisible;
+                      mesh.material.opacity = isVisible ? 1.0 : 0.15;
+                  });
+              });
+              if (t.floorId) t.floorId.visible = true;
               if (t.labelObject && engine.selectedTowerId !== t.id) t.labelObject.visible = false;
           });
       },
@@ -546,7 +584,8 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
               z = startZ - r * espaciadoZ;
             } else {
               let i = index - 20;
-              x = startX + 2 * espaciadoX + i * espaciadoX;
+              // Corregido: empezar desde la columna 4 (después de P20) en lugar de la columna 2
+              x = startX + 4 * espaciadoX + i * espaciadoX;
               z = zFila;
             }
             engine.createTower(tData, x, z);
@@ -563,7 +602,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
     // Llenar flejes
     const capMaxMap = {};
     torres.forEach(t => {
-        capMaxMap[t.id] = t.capacidad_maxima || 5;
+        capMaxMap[t.id] = t.cantidad_maxima || 5;
         const flejes = inventario[t.id] || [];
         flejes.forEach(f => {
             engine.addFleje(t.id, f);
@@ -603,7 +642,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
            <Box className="w-4 h-4" />
          </div>
          <div>
-           <h3 className="text-sm font-black tracking-tight text-foreground">Almacén 3D</h3>
+           <h3 className="text-sm font-black tracking-tight text-foreground">Vista 3D</h3>
            <p className="text-[9px] font-bold text-text-muted uppercase tracking-[0.1em]">Gemelo Digital</p>
          </div>
       </div>
