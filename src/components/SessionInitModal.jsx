@@ -300,7 +300,23 @@ export default function SessionInitModal({
     }
   }
 
-  const handleRemoveFoto = (indexToRemove) => {
+  const handleRemoveFoto = async (indexToRemove) => {
+    const url = fotos[indexToRemove]
+    
+    // Intentar borrar de Supabase Storage
+    try {
+      // Extraemos el nombre del archivo de la URL pública
+      const parts = url.split('/fotos/')
+      if (parts.length > 1) {
+        const filePath = parts[1]
+        const { error } = await supabase.storage.from('fotos').remove([filePath])
+        if (error) throw error
+      }
+    } catch (err) {
+      console.error('Error al borrar foto de storage:', err)
+      // Aunque falle en backend, la quitamos del UI para no bloquear al usuario
+    }
+
     setFotos(prev => prev.filter((_, idx) => idx !== indexToRemove))
   }
 

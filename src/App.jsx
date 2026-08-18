@@ -631,13 +631,33 @@ function App() {
   // Cancelar Operación Activa
   const handleCancelActiveSession = (type) => {
     const isRec = type === 'reception'
+    const sessionToCancel = isRec ? receptionSession : dispatchSession
+
     setConfirmConfig({
       title: isRec ? 'Descartar Recepción' : 'Descartar Despacho',
       message: `¿Estás seguro de que deseas cancelar y descartar todo el lote de ${isRec ? 'recepción de camión' : 'despacho de material'} en curso? Esta acción es irreversible y vaciará el borrador actual.`,
       type: 'danger',
-      onConfirm: () => {
+      onConfirm: async () => {
+        // 1. Limpiar fotos huérfanas del Storage
+        if (sessionToCancel && sessionToCancel.fotos && sessionToCancel.fotos.length > 0) {
+          try {
+            const filePaths = sessionToCancel.fotos.map(url => {
+              const parts = url.split('/fotos/')
+              return parts.length > 1 ? parts[1] : null
+            }).filter(Boolean)
+            
+            if (filePaths.length > 0) {
+              await supabase.storage.from('fotos').remove(filePaths)
+            }
+          } catch (e) {
+            console.error('Error eliminando fotos huérfanas de storage:', e)
+          }
+        }
+
+        // 2. Descartar sesión localmente
         if (isRec) setReceptionSession(null)
         else setDispatchSession(null)
+        
         showToast(isRec ? 'Recepción descartada' : 'Despacho descartado', true)
       }
     })
