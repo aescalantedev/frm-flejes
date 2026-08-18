@@ -130,14 +130,36 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
     for(let x=-99.5;x<=105;x+=13){floorLine(x,-2.5,.12,8.6);floorLine(x,10.5,.12,8.6)}
     for(let z=-54;z<=37;z+=13){floorLine(-97,z,8.5,.12)}
 
-    // --- BILLBOARD (KPIs) ---
+    // --- DUAL BILLBOARDS (KPIs & Inventory) ---
     const bbGroup = new THREE.Group();
     const pillarMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-    const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 30, 16), pillarMat);
-    p1.position.set(-20, 15, 0); p1.castShadow = true;
-    const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 30, 16), pillarMat);
-    p2.position.set(20, 15, 0); p2.castShadow = true;
     
+    // 3 Pilares para soportar dos pantallas
+    const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 30, 16), pillarMat);
+    p1.position.set(-46, 15, 0); p1.castShadow = true;
+    const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 30, 16), pillarMat);
+    p2.position.set(0, 15, 0); p2.castShadow = true;
+    const p3 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 30, 16), pillarMat);
+    p3.position.set(46, 15, 0); p3.castShadow = true;
+    
+    // Pantalla Izquierda (Inventario por Medida)
+    const bbCanvasInv = document.createElement('canvas');
+    bbCanvasInv.width = 1024;
+    bbCanvasInv.height = 1024; // Más alta para la tabla
+    const bbCtxInv = bbCanvasInv.getContext('2d');
+    const bbTexInv = new THREE.CanvasTexture(bbCanvasInv);
+    bbTexInv.colorSpace = THREE.SRGBColorSpace;
+    
+    const screenGeoInv = new THREE.PlaneGeometry(42, 42);
+    const screenMatInv = new THREE.MeshBasicMaterial({ map: bbTexInv });
+    const screenMeshInv = new THREE.Mesh(screenGeoInv, screenMatInv);
+    screenMeshInv.position.set(-23, 30, 0.8);
+    screenMeshInv.userData = { isBillboard: true };
+    const screenBackInv = new THREE.Mesh(new THREE.BoxGeometry(44, 44, 1.5), pillarMat);
+    screenBackInv.position.set(-23, 30, 0);
+    screenBackInv.castShadow = true;
+
+    // Pantalla Derecha (Stats Generales)
     const bbCanvas = document.createElement('canvas');
     bbCanvas.width = 1024;
     bbCanvas.height = 512;
@@ -148,16 +170,16 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
     const screenGeo = new THREE.PlaneGeometry(42, 22);
     const screenMat = new THREE.MeshBasicMaterial({ map: bbTex });
     const screenMesh = new THREE.Mesh(screenGeo, screenMat);
-    screenMesh.position.set(0, 30, 0.8);
+    screenMesh.position.set(23, 20, 0.8); // Alineada por debajo
     screenMesh.userData = { isBillboard: true };
     
     const screenBack = new THREE.Mesh(new THREE.BoxGeometry(44, 24, 1.5), pillarMat);
-    screenBack.position.set(0, 30, 0);
+    screenBack.position.set(23, 20, 0);
     screenBack.castShadow = true;
 
-    bbGroup.add(p1, p2, screenBack, screenMesh);
-    bbGroup.position.set(40, 0, -60); // Colocar atrás a la derecha
-    bbGroup.rotation.y = -Math.PI / 12; // Girar levemente hacia la cámara
+    bbGroup.add(p1, p2, p3, screenBackInv, screenMeshInv, screenBack, screenMesh);
+    bbGroup.position.set(20, 0, -60); // Ajustar centro
+    bbGroup.rotation.y = -Math.PI / 12; 
     scene.add(bbGroup);
 
     // --- MATERIALS & GEOMETRIES FOR DATA ---
@@ -242,6 +264,30 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         return tex;
     };
 
+    const makeInvSpriteTexture = (uds) => {
+        const c = document.createElement('canvas');
+        c.width = 128; c.height = 128; // Circular
+        const ctx = c.getContext('2d');
+        
+        ctx.fillStyle = 'rgba(23, 27, 29, 0.9)';
+        ctx.beginPath();
+        ctx.arc(64, 64, 60, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.font = '900 64px sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(uds, 64, 68);
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
+    };
+
     // --- OPERARIO ---
     const avatar = new THREE.Group();
     const matYellow = new THREE.MeshStandardMaterial({ color: 0xe1b31c, roughness: 0.78 });
@@ -269,7 +315,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
       allTowers: {},
       bases: [],
       allFlejes: [],
-      interactables: [screenMesh],
+      interactables: [screenMesh, screenMeshInv],
       avatarPath: [],
       avatarMoving: false,
       selectedTowerId: null,
@@ -462,6 +508,19 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         label.visible = false;
         scene.add(label);
         
+        // --- NUEVA ETIQUETA INVENTARIO (Sprite Nativo Circular) ---
+        const spriteMat = new THREE.SpriteMaterial({ 
+           map: makeInvSpriteTexture('0'), 
+           depthTest: true,
+           sizeAttenuation: false
+        });
+        const invSprite = new THREE.Sprite(spriteMat);
+        // Escala reducida para que sea como un pequeño pin/insignia (aprox 2% alto pantalla)
+        invSprite.scale.set(0.02, 0.02, 1); 
+        invSprite.position.set(x, 2.5, z); 
+        scene.add(invSprite);
+        // ----------------------------------------------------
+        
         const topTex = makeTopCartonTexture(tData.nombre_medida, false);
         const topMat = new THREE.MeshStandardMaterial({ map: topTex, roughness: 1.0, metalness: 0, transparent: true });
         const localMatCarton = matCarton.clone();
@@ -474,7 +533,8 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         engine.allTowers[id] = { 
             id, x, z, stack: [], baseMesh: base, 
             labelElement: labelDiv, labelObject: label, floorId: idFloor,
-            tapaMesh, topMat, nombre_medida: tData.nombre_medida, isMixed: false
+            tapaMesh, topMat, nombre_medida: tData.nombre_medida, isMixed: false,
+            invSprite: invSprite, lastCount: 0
         };
       },
       addFleje: (torreId, flejeData, capMax) => {
@@ -572,8 +632,20 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
               if (n > 0) {
                   const topY = 0.72 + (n - 1) * 1.25 + 0.65;
                   t.tapaMesh.position.set(t.x, topY, t.z);
+                  if (t.invSprite) t.invSprite.position.set(t.x, topY + 1.2, t.z); // Flota sobre la tapa
               } else {
                   t.tapaMesh.position.set(t.x, 0.4, t.z); // Sobre el pallet
+                  if (t.invSprite) t.invSprite.position.set(t.x, 2.0, t.z); // Flota bajito
+              }
+              
+              if (t.invSprite) {
+                if (t.lastCount !== n) {
+                    t.lastCount = n;
+                    if (t.invSprite.material.map) t.invSprite.material.map.dispose();
+                    t.invSprite.material.map = makeInvSpriteTexture(n.toString());
+                }
+                t.invSprite.visible = isVisible;
+                t.invSprite.material.opacity = isVisible ? 1.0 : 0.0; // Desaparece si hay filtro
               }
               
               t.tapaMesh.visible = true;
@@ -596,21 +668,20 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
       
       updateBillboard: (statsObj) => {
         if (!statsObj) return;
+        
+        // --- 1. ACTUALIZAR PANEL DERECHO (STATS) ---
         bbCtx.fillStyle = '#171b1d'; 
         bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
-        
         bbCtx.strokeStyle = '#25292b';
         bbCtx.lineWidth = 2;
         for(let i=0; i<=1024; i+=64) { bbCtx.beginPath(); bbCtx.moveTo(i,0); bbCtx.lineTo(i,512); bbCtx.stroke(); }
         for(let j=0; j<=512; j+=64) { bbCtx.beginPath(); bbCtx.moveTo(0,j); bbCtx.lineTo(1024,j); bbCtx.stroke(); }
 
         bbCtx.textAlign = 'center';
-        
         bbCtx.font = '900 48px sans-serif';
         bbCtx.fillStyle = '#d7a916';
         bbCtx.fillText('PANEL DE CONTROL', 512, 70);
 
-        // Stats Render
         const drawStat = (val, lbl, x, y, color) => {
            bbCtx.font = 'bold 72px monospace';
            bbCtx.fillStyle = color;
@@ -624,8 +695,77 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         drawStat(statsObj.totalFlejes || 0, 'TOTAL FLEJES', 768, 220, '#fff');
         drawStat(statsObj.pesoFmt || '0', 'PESO TOTAL', 256, 410, '#6fb889');
         drawStat(statsObj.capacidadPromedio || '0%', 'CAPACIDAD PROMEDIO', 768, 410, '#6d93a3');
-
         bbTex.needsUpdate = true;
+        
+        // --- 2. ACTUALIZAR PANEL IZQUIERDO (INVENTARIO) ---
+        bbCtxInv.fillStyle = '#171b1d'; 
+        bbCtxInv.fillRect(0, 0, bbCanvasInv.width, bbCanvasInv.height);
+        bbCtxInv.strokeStyle = '#25292b';
+        bbCtxInv.lineWidth = 2;
+        for(let i=0; i<=1024; i+=64) { bbCtxInv.beginPath(); bbCtxInv.moveTo(i,0); bbCtxInv.lineTo(i,1024); bbCtxInv.stroke(); }
+        for(let j=0; j<=1024; j+=64) { bbCtxInv.beginPath(); bbCtxInv.moveTo(0,j); bbCtxInv.lineTo(1024,j); bbCtxInv.stroke(); }
+
+        bbCtxInv.textAlign = 'center';
+        bbCtxInv.font = '900 48px sans-serif';
+        bbCtxInv.fillStyle = '#d7a916';
+        bbCtxInv.fillText('INVENTARIO VALORIZADO', 512, 70);
+
+        // Agrupar Inventario y Calcular Valorización
+        const invSummary = {};
+        Object.values(inventario).forEach(flejes => {
+            flejes.forEach(f => {
+                const med = normalizeMedida(f.medida) || 'OTRO';
+                if(!invSummary[med]) invSummary[med] = { count: 0, valor: 0 };
+                invSummary[med].count += 1;
+                invSummary[med].valor += (f.peso * (parseFloat(f.costo_kg_ingreso) || 0));
+            });
+        });
+
+        // Ordenar por cantidad descendente
+        const items = Object.entries(invSummary).sort((a,b) => b[1].count - a[1].count);
+        
+        // Cabeceras de Tabla
+        bbCtxInv.font = 'bold 28px monospace';
+        bbCtxInv.fillStyle = '#8a9194';
+        bbCtxInv.textAlign = 'left';
+        bbCtxInv.fillText('MEDIDA', 80, 150);
+        bbCtxInv.textAlign = 'center';
+        bbCtxInv.fillText('CANTIDAD', 512, 150);
+        bbCtxInv.textAlign = 'right';
+        bbCtxInv.fillText('VALORIZACION (S/)', 944, 150);
+        
+        bbCtxInv.fillStyle = '#3f4547';
+        bbCtxInv.fillRect(60, 170, 904, 4);
+
+        let y = 250;
+        const maxRows = 10; // Reducido para que no se corte al fondo
+        for (let i = 0; i < Math.min(items.length, maxRows); i++) {
+            const [med, data] = items[i];
+            
+            bbCtxInv.fillStyle = '#fff';
+            bbCtxInv.font = 'bold 42px monospace';
+            bbCtxInv.textAlign = 'left';
+            bbCtxInv.fillText(med, 80, y);
+            
+            bbCtxInv.textAlign = 'center';
+            bbCtxInv.fillText(data.count + ' uds', 512, y);
+            
+            bbCtxInv.fillStyle = '#6fb889';
+            bbCtxInv.textAlign = 'right';
+            const valStr = data.valor.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            bbCtxInv.fillText(valStr, 944, y);
+            
+            y += 65;
+        }
+
+        if (items.length > maxRows) {
+            bbCtxInv.fillStyle = '#8a9194';
+            bbCtxInv.font = 'bold 28px sans-serif';
+            bbCtxInv.textAlign = 'center';
+            bbCtxInv.fillText(`... y ${items.length - maxRows} medidas más`, 512, y + 5);
+        }
+
+        bbTexInv.needsUpdate = true;
       }
     };
 
@@ -657,14 +797,46 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         engine.selectTower(hitBase.object.userData.torreId);
         return;
       }
-
+      
       const hitInteractable = raycaster.intersectObjects(engine.interactables)[0];
-      if (hitInteractable && hitInteractable.object.userData.isBillboard) {
-        engine.clearSelection();
-        setActiveView(null);
-        gsap.to(camera.position, { x: 40, y: 30, z: -15, duration: 0.8, ease: 'power2.inOut' });
-        gsap.to(controls.target, { x: 40, y: 30, z: -60, duration: 0.8, ease: 'power2.inOut' });
+      if (hitInteractable && hitInteractable.object.userData?.isBillboard) {
+          const mesh = hitInteractable.object;
+          engine.clearSelection();
+          setActiveView(null);
+          
+          const targetPos = new THREE.Vector3();
+          mesh.getWorldPosition(targetPos);
+          
+          const worldQuat = new THREE.Quaternion();
+          mesh.getWorldQuaternion(worldQuat);
+          const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(worldQuat).normalize();
+          
+          const isInvPanel = mesh.geometry.parameters.height > 30; // 42 vs 22
+          const dist = isInvPanel ? 50 : 32; 
+          
+          const camTarget = targetPos.clone().add(normal.multiplyScalar(dist));
+          
+          gsap.to(camera.position, {
+              x: camTarget.x,
+              y: camTarget.y,
+              z: camTarget.z,
+              duration: 1.5,
+              ease: "power3.inOut",
+          });
+          gsap.to(controls.target, {
+              x: targetPos.x,
+              y: targetPos.y,
+              z: targetPos.z,
+              duration: 1.5,
+              ease: "power3.inOut",
+              onUpdate: () => controls.update()
+          });
+          return;
       }
+
+      // Click en espacio vacío
+      engine.clearSelection();
+      setActiveView(null);
     };
     
     container.addEventListener('click', onClick);
