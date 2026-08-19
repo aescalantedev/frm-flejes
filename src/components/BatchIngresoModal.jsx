@@ -19,6 +19,7 @@ export default function BatchIngresoModal({
   const [pesosList, setPesosList] = useState([])
   const [currentPeso, setCurrentPeso] = useState('')
   const [currentProductoId, setCurrentProductoId] = useState('')
+  const [currentLote, setCurrentLote] = useState('')
   const inputRef = useRef(null)
 
   const isFloor = !torreId || torreName === 'Al Piso'
@@ -30,13 +31,14 @@ export default function BatchIngresoModal({
     if (isOpen) {
       setPesosList([])
       setCurrentPeso('')
+      setCurrentLote('')
       // Preseleccionar el producto oficial de la torre si lo tiene
       if (torreProductoId) {
-      setCurrentProductoId(torreProductoId)
-    } else {
-      const match = catalogoProductos.find(c => c.medida_corta === torreName || c.medida === torreName)
-      setCurrentProductoId(match ? match.id : '')
-    }
+        setCurrentProductoId(torreProductoId)
+      } else {
+        const match = catalogoProductos.find(c => c.medida_corta === torreName || c.medida === torreName)
+        setCurrentProductoId(match ? match.id : '')
+      }
       setTimeout(() => inputRef.current?.focus(), 150)
     }
   }, [isOpen, torreProductoId])
@@ -75,9 +77,11 @@ export default function BatchIngresoModal({
       producto_id: pId,
       medida: prodInfo.medida || prodInfo.medida_corta || 'N/A',
       codigo: prodInfo.codigo || '',
-      costo_kg_aplicado: costoToApply
+      costo_kg_aplicado: costoToApply,
+      lote: currentLote.trim()
     }])
     setCurrentPeso('')
+    // NO limpiamos el lote porque en una misma recepción, los flejes suelen compartir lote
     // Mantiene seleccionado el mismo producto para carga más rápida
     inputRef.current?.focus()
   }
@@ -130,22 +134,35 @@ export default function BatchIngresoModal({
           
           {/* Formulario */}
           <form onSubmit={handleAddPeso} className="flex flex-col gap-2.5">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
-                <input
-                  ref={inputRef}
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  placeholder="Peso (Kg). Ej. 750.50"
-                  value={currentPeso}
-                  onChange={(e) => setCurrentPeso(e.target.value)}
-                  className="w-full bg-bg border border-border text-foreground placeholder:text-text-muted/40 rounded-xl py-3 px-4 text-xs font-semibold outline-none focus:border-accent font-mono"
-                />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-text-muted font-mono">kg</span>
+            <div className="flex flex-col gap-2">
+              {/* Primera fila: Lote y Peso */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="Lote (Opcional)"
+                    value={currentLote}
+                    onChange={(e) => setCurrentLote(e.target.value.toUpperCase())}
+                    className="w-full bg-bg border border-border text-foreground placeholder:text-text-muted/40 rounded-xl py-3 px-4 text-xs font-semibold outline-none focus:border-accent font-mono"
+                  />
+                </div>
+                <div className="relative flex-1">
+                  <input
+                    ref={inputRef}
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    placeholder="Peso (Kg). Ej. 750.5"
+                    value={currentPeso}
+                    onChange={(e) => setCurrentPeso(e.target.value)}
+                    className="w-full bg-bg border border-border text-foreground placeholder:text-text-muted/40 rounded-xl py-3 px-4 text-xs font-semibold outline-none focus:border-accent font-mono pr-8"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-text-muted font-mono">kg</span>
+                </div>
               </div>
               
-              <div className="flex-1 sm:w-3/5">
+              {/* Segunda fila: Selector de Producto */}
+              <div className="w-full">
                 <div className="h-11 w-full">
                   <SearchableSelect
                     options={catalogoProductos.map(p => ({
@@ -199,9 +216,16 @@ export default function BatchIngresoModal({
                         <span className="text-xs font-bold text-foreground font-mono">{item.peso.toFixed(2)} kg</span>
                       </div>
                       
-                      <span className="text-[9px] font-semibold text-accent font-mono uppercase bg-accent/5 border border-accent/20 px-1 py-0.5 rounded mt-1 line-clamp-1 max-w-[250px]" title={item.codigo}>
-                        {item.codigo} - {item.medida}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        <span className="text-[9px] font-semibold text-accent font-mono uppercase bg-accent/5 border border-accent/20 px-1 py-0.5 rounded line-clamp-1 max-w-[200px]" title={item.codigo}>
+                          {item.codigo} - {item.medida}
+                        </span>
+                        {item.lote && (
+                          <span className="text-[9px] font-semibold text-foreground/70 font-mono bg-bg border border-border/50 px-1 py-0.5 rounded max-w-[100px] truncate" title={`Lote: ${item.lote}`}>
+                            {item.lote}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     
                     <div className="flex items-center justify-between w-full sm:w-auto gap-3">

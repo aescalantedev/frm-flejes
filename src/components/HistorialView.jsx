@@ -926,11 +926,18 @@ export default function HistorialView({ historial = [], activeSessions = [], use
                         <span className="text-[10px] text-text-muted font-mono block mt-0.5">
                           {item.medida || 'Suelto'}
                         </span>
-                        {item.glosa && (
-                          <span className="mt-1 inline-flex w-fit items-center px-2 py-0.5 rounded text-[9px] font-medium bg-surface border border-border text-text-muted/90 truncate max-w-[150px]" title={item.glosa}>
-                            {item.glosa}
-                          </span>
-                        )}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          {item.glosa && (
+                            <span className="inline-flex w-fit items-center px-2 py-0.5 rounded text-[9px] font-medium bg-surface border border-border text-text-muted/90 truncate max-w-[150px]" title={item.glosa}>
+                              {item.glosa}
+                            </span>
+                          )}
+                          {item.lote && (
+                            <span className="inline-flex w-fit items-center px-2 py-0.5 rounded text-[9px] font-bold bg-accent/10 border border-accent/20 text-accent truncate max-w-[150px]" title={`Lote: ${item.lote}`}>
+                              Lote: {item.lote}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 font-mono">
                         <span className="font-bold text-foreground text-sm">

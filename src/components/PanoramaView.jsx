@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Plus, Truck, Send, Check, Box, Grid } from 'lucide-react'
+import { Plus, Truck, Send, Check, Box, Grid, ChevronUp, ChevronDown, Clock } from 'lucide-react'
 import { useUnitSystem } from '../hooks/useUnitSystem'
 import Panorama3D from './Panorama3D'
 
@@ -31,6 +31,7 @@ export default function PanoramaView({
   onStartDispatch,
   onOpenBatchIngreso,
   onToggleSelectFleje,
+  onReorderFleje,
   dispatchCart = [],
   showToast,
   catalogoCostos = [],
@@ -404,6 +405,14 @@ export default function PanoramaView({
             }
 
             // Generar visualización de los pesos en la derecha (antiguo al tope, reciente a la base)
+            let maxDias = 0;
+            flejes.forEach(f => {
+              const fDate = f.fecha_ingreso || f.created_at;
+              const diff = fDate ? Math.floor((new Date() - new Date(fDate)) / (1000 * 60 * 60 * 24)) : 0;
+              f._dias = diff >= 0 ? diff : 0;
+              if (f._dias > maxDias) maxDias = f._dias;
+            });
+
             const visualStack = []
             for (let i = 0; i < capMax; i++) {
               const itemIndex = capMax - i - 1
@@ -415,10 +424,13 @@ export default function PanoramaView({
                 const canSelect = !dispatchActive || isMixedTower || (itemIndex === highestUnselectedIdx || itemIndex === lowestSelectedIdx)
                 const showDiffMeasure = fleje.medida && fleje.medida !== torre.nombre_medida
                 const costoFleje = fleje.peso * (parseFloat(fleje.costo_kg_ingreso) || 0)
+                
+                const isOldest = fleje._dias === maxDias && maxDias > 0;
+                const isWarning = fleje._dias >= 30; // Solo alerta roja si > 30 días
 
                 visualStack.push(
                   <div 
-                    key={i} 
+                    key={`occupied-${itemIndex}`} 
                     onClick={(e) => {
                       if (dispatchActive) {
                         e.stopPropagation() // Evita clicks en el card
@@ -428,59 +440,94 @@ export default function PanoramaView({
                       }
                     }}
                     className={`
-                      border rounded-xl px-3 py-1.5 flex items-center justify-between transition-all select-none min-h-[34px]
+                      border rounded-xl px-2 py-1 flex items-center justify-between transition-all select-none min-h-[36px] mb-1
                       ${dispatchActive && canSelect ? 'cursor-pointer active:scale-95' : ''}
                       ${dispatchActive && !canSelect && !isSelected ? 'opacity-40 cursor-not-allowed' : ''}
                       ${dispatchActive && !canSelect && isSelected ? 'opacity-80 cursor-not-allowed' : ''}
                       ${isSelected 
-                        ? 'bg-warning text-white border-warning shadow-md scale-98 font-bold' 
+                        ? 'bg-warning text-white border-warning shadow-md scale-98' 
                         : dispatchActive && canSelect
                           ? 'bg-surface border-accent/40 text-accent hover:bg-accent/5'
-                          : 'bg-accent/10 border-accent/30 text-accent'
+                          : isWarning && !dispatchActive
+                            ? 'bg-danger/10 border-danger/30 text-danger hover:border-danger/50'
+                            : 'bg-accent/10 border-accent/30 text-accent'
                       }
                     `}
                   >
-                    <span className={`text-[9px] font-semibold font-mono w-4 shrink-0 ${isSelected ? 'text-white/80' : 'text-text-muted'}`}>#{itemIndex + 1}</span>
-                    <div className="flex flex-1 items-center justify-between overflow-hidden mx-1.5">
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs font-bold font-mono">{isTN ? (fleje.peso / 1000).toFixed(3) : fleje.peso.toFixed(2)} {isTN ? 't' : 'kg'}</span>
-                        {showDiffMeasure && (
-                          <span 
-                            title={`Medida diferente: ${fleje.medida}`}
-                            className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded border leading-none font-mono uppercase ${
-                              isSelected
-                                ? 'bg-white text-warning border-white'
-                                : 'bg-warning/15 text-warning border-warning/30 animate-pulse'
-                            }`}
-                          >
-                            {fleje.medida}
-                          </span>
-                        )}
-                      </div>
-                      
-                      {costoFleje > 0 && (
-                        <span className={`text-[9.5px] font-black font-mono px-2 py-0.5 rounded border shadow-xs ml-2 truncate tracking-tight ${
-                          isSelected 
-                            ? 'bg-white/20 text-white border-white/30' 
-                            : 'bg-surface border-border/60 text-foreground/90'
-                        }`}>
-                          S/ {costoFleje.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`text-[9px] font-bold font-mono w-4 shrink-0 text-center rounded-sm ${isSelected ? 'text-white/90 bg-white/20' : 'text-text-muted bg-bg/50'}`}>#{itemIndex + 1}</span>
+                      <span className="text-[11px] font-bold font-mono">{isTN ? (fleje.peso / 1000).toFixed(3) : fleje.peso.toFixed(2)} {isTN ? 't' : 'kg'}</span>
+                      {showDiffMeasure && (
+                        <span 
+                          title={`Medida diferente: ${fleje.medida}`}
+                          className={`text-[8px] font-extrabold px-1 py-0.5 rounded border leading-none font-mono uppercase ${
+                            isSelected ? 'bg-white text-warning border-white' : 'bg-warning/15 text-warning border-warning/30 animate-pulse'
+                          }`}
+                        >
+                          {fleje.medida}
                         </span>
                       )}
                     </div>
+                    
+                    <div className="flex flex-1 items-center justify-center gap-1 overflow-hidden px-1">
+                      <span 
+                        title={`Lote: ${fleje.lote || 'N/A'}`}
+                        className={`text-[8px] px-1.5 py-0.5 rounded border truncate max-w-[65px] 2xl:max-w-[80px] ${
+                          isSelected ? 'bg-white/20 text-white border-white/30' : 'bg-black/5 text-text-muted border-black/10'
+                        }`}
+                      >
+                        {fleje.lote || 'S/L'}
+                      </span>
+                      <span 
+                        title={`${fleje._dias} días en almacén`}
+                        className={`text-[8px] px-1.5 py-0.5 rounded border flex items-center gap-0.5 shrink-0 ${
+                          isSelected ? 'bg-white/20 text-white border-white/30' : 
+                          isWarning ? 'bg-danger/10 text-danger border-danger/20' : 'bg-black/5 text-text-muted border-black/10'
+                        }`}
+                      >
+                        <Clock className="w-2 h-2" />
+                        {fleje._dias}d
+                      </span>
+                    </div>
 
-                    {isSelected ? (
-                      <Check className="w-3.5 h-3.5 text-white animate-scaleUp shrink-0" />
-                    ) : (
-                      <div className="w-3.5 shrink-0" />
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {costoFleje > 0 && (
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
+                          isSelected ? 'bg-white/20 text-white border-white/30' : isWarning && !dispatchActive ? 'bg-danger/5 border-danger/20 text-danger' : 'bg-surface border-border/60 text-foreground/90'
+                        }`}>
+                          S/ {costoFleje.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+                        </span>
+                      )}
+
+                      {!dispatchActive && !receptionActive && !isPublicView && onReorderFleje && (
+                        <div className="flex flex-col gap-0">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); onReorderFleje(torre.id, fleje.id, 'up') }}
+                            disabled={itemIndex === cantidadActual - 1}
+                            className={`p-0 rounded transition-colors ${itemIndex === cantidadActual - 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-bg/50 active:scale-90 text-text-muted hover:text-foreground'}`}
+                            title="Subir posición (hacer más viejo)"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); onReorderFleje(torre.id, fleje.id, 'down') }}
+                            disabled={itemIndex === 0}
+                            className={`p-0 rounded transition-colors ${itemIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-bg/50 active:scale-90 text-text-muted hover:text-foreground'}`}
+                            title="Bajar posición (hacer más nuevo)"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                      {isSelected && <Check className="w-3.5 h-3.5 text-white animate-scaleUp shrink-0" />}
+                    </div>
                   </div>
                 )
               } else {
                 visualStack.push(
                   <div 
-                    key={i} 
-                    className="bg-bg/40 border border-border border-dashed rounded-xl px-3 py-1.5 flex items-center justify-between text-text-muted/30 min-h-[34px]"
+                    key={`empty-${i}`} 
+                    className="bg-bg/40 border border-border border-dashed rounded-xl px-3 py-1 flex items-center justify-between text-text-muted/30 min-h-[34px] mb-1"
                   >
                     <span className="text-[9px] font-medium font-mono">#{itemIndex + 1}</span>
                     <span className="text-xs font-mono tracking-wider">---</span>
@@ -492,7 +539,7 @@ export default function PanoramaView({
 
             // Generar dibujo isométrico SVG dinámico de las bobinas en el poste
             const svgCoils = []
-            const spacing = 135 / capMax
+            const spacing = capMax > 1 ? (150 / (capMax - 1)) : 0
             const thickness = Math.max(3, Math.min(10, 100 / capMax))
             const rx = Math.max(12, Math.min(22, 110 / capMax))
             const ry = rx * 0.3
@@ -624,9 +671,9 @@ export default function PanoramaView({
                   </div>
 
                   {/* Vista física SVG y listado lado a lado */}
-                  <div className="flex gap-4 items-start mt-auto mb-4">
+                  <div className="flex gap-4 items-stretch mt-auto mb-4">
                     {/* Columna Izquierda: Dibujo físico SVG */}
-                    <div className="w-[85px] sm:w-[95px] flex items-end justify-center bg-bg/20 border border-border/30 rounded-2xl py-1.5 px-2 select-none relative overflow-hidden shrink-0" style={{ height: `${capMax * 33.5}px` }}>
+                    <div className="w-[85px] sm:w-[95px] flex items-end justify-center bg-bg/20 border border-border/30 rounded-2xl py-1.5 px-2 select-none relative overflow-hidden shrink-0">
                       <svg className="w-full h-full" viewBox="0 0 60 180" fill="none" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
                         <defs>
                           {/* Poste central degradado metálico */}
@@ -662,7 +709,7 @@ export default function PanoramaView({
                     </div>
 
                     {/* Columna Derecha: Pesos detallados */}
-                    <div className="flex-1 flex flex-col space-y-1">
+                    <div className="flex-1 flex flex-col justify-between space-y-1 py-1.5">
                       {visualStack}
                     </div>
                   </div>

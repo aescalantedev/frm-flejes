@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { X, Plus, Trash2, ArrowRightLeft, Percent, Scale, Check, AlertTriangle, Edit3 } from 'lucide-react'
+import { X, Plus, Trash2, ArrowRightLeft, Percent, Scale, Check, AlertTriangle, Edit3, Clock } from 'lucide-react'
 import SearchableSelect from './SearchableSelect'
+import CustomDatePicker from './CustomDatePicker'
 import ReactECharts from 'echarts-for-react'
 
 // Utilidad para normalizar medidas ("284 X 2.0" -> "284X2") y asegurar que coincida con la DB
@@ -36,9 +37,11 @@ export default function DetailDrawer({
   const [activeFlejeMenu, setActiveFlejeMenu] = useState(null) // { id, num, peso }
   
   // Estado del modal de edición de peso y medida
-  const [editModalConfig, setEditModalConfig] = useState(null) // { id, num, peso, medida }
+  const [editModalConfig, setEditModalConfig] = useState(null) // { id, num, peso, medida, lote, fecha_ingreso }
   const [editPeso, setEditPeso] = useState('')
   const [editMedida, setEditMedida] = useState('')
+  const [editLote, setEditLote] = useState('')
+  const [editFechaIngreso, setEditFechaIngreso] = useState('')
 
   // Estado de confirmación local personalizado (Tailwind CSS Modal)
   const [confirmConfig, setConfirmConfig] = useState(null) // { title, message, type, onConfirm }
@@ -117,10 +120,14 @@ export default function DetailDrawer({
       num, 
       peso: fleje.peso, 
       producto_id: initProdId,
-      medida: fleje.medida || (catalogoProductos.find(p => p.id === initProdId)?.medida || '')
+      medida: fleje.medida || (catalogoProductos.find(p => p.id === initProdId)?.medida || ''),
+      lote: fleje.lote || '',
+      fecha_ingreso: fleje.fecha_ingreso ? new Date(fleje.fecha_ingreso).toISOString().split('T')[0] : ''
     })
     setEditPeso(String(fleje.peso))
     setEditMedida(initProdId)
+    setEditLote(fleje.lote || '')
+    setEditFechaIngreso(fleje.fecha_ingreso ? new Date(fleje.fecha_ingreso).toISOString().split('T')[0] : '')
   }
 
   const handleSaveEditClick = () => {
@@ -145,6 +152,14 @@ export default function DetailDrawer({
         msgChanges.push(`producto a ${prod.medida_corta || prod.medida}`)
       }
     }
+
+    if (editLote !== editModalConfig.lote) {
+      msgChanges.push(`lote a ${editLote || 'N/A'}`)
+    }
+
+    if (editFechaIngreso !== editModalConfig.fecha_ingreso) {
+      msgChanges.push(`fecha a ${editFechaIngreso || 'N/A'}`)
+    }
     
     if (msgChanges.length === 0) {
       setEditModalConfig(null)
@@ -153,7 +168,7 @@ export default function DetailDrawer({
 
     setConfirmConfig({
       title: 'Confirmar Modificación',
-      message: `¿Estás seguro de cambiar el ${msgChanges.join(' y la ')} del Fleje #${editModalConfig.num}?`,
+      message: `¿Estás seguro de cambiar el ${msgChanges.join(', ')} del Fleje #${editModalConfig.num}?`,
       type: 'warning',
       onConfirm: async () => {
         let nProdId = editMedida || null
@@ -162,7 +177,7 @@ export default function DetailDrawer({
           const costoInfo = catalogoCostos.find(c => getProdId(c) === nProdId)
           nCosto = costoInfo ? costoInfo.costo_kg : 0
         }
-        await onEditarFleje(editModalConfig.id, val, nProdId, nCosto)
+        await onEditarFleje(editModalConfig.id, val, nProdId, nCosto, editLote, editFechaIngreso)
         setEditModalConfig(null)
         setConfirmConfig(null)
       }
@@ -484,6 +499,17 @@ export default function DetailDrawer({
                           </span>
                         )}
                       </div>
+                      
+                      {/* Fila secundaria: Lote y Días */}
+                      <div className="flex items-center justify-between mt-1 pt-1 border-t border-current/10 w-full">
+                        <span className="text-[9px] font-mono text-text-muted truncate max-w-[80px]" title={`Lote: ${fleje.lote || 'N/A'}`}>
+                          L: <span className="font-semibold text-foreground/80">{fleje.lote || 'S/L'}</span>
+                        </span>
+                        <div className="flex items-center gap-1 text-[9px] font-bold text-text-muted" title={`${fleje._dias !== undefined ? fleje._dias : Math.max(0, Math.floor((new Date() - new Date(fleje.fecha_ingreso || fleje.created_at)) / (1000 * 60 * 60 * 24)))} días en almacén`}>
+                          <Clock className="w-2.5 h-2.5" />
+                          <span>{fleje._dias !== undefined ? fleje._dias : Math.max(0, Math.floor((new Date() - new Date(fleje.fecha_ingreso || fleje.created_at)) / (1000 * 60 * 60 * 24)))} d</span>
+                        </div>
+                      </div>
                     </div>
                   )
                 })}
@@ -632,7 +658,28 @@ export default function DetailDrawer({
                       fallbackLabel={editModalConfig.medida}
                     />
                 </div>
-                <p className="text-[10px] text-text-muted/60 mt-1">Si dejas esto en blanco, se usará la medida por defecto de la torre.</p>
+                <p className="text-[10px] text-text-muted/60 mt-1">Si no cambias esto, mantendrá la medida actual.</p>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="space-y-1 flex-1">
+                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider">Lote (Opcional)</label>
+                  <input 
+                    type="text"
+                    value={editLote}
+                    onChange={(e) => setEditLote(e.target.value.toUpperCase())}
+                    className="w-full bg-bg border border-border focus:border-accent rounded-xl px-4 py-2.5 text-xs font-semibold outline-none"
+                    placeholder="S/L"
+                  />
+                </div>
+
+                <div className="flex-1">
+                  <CustomDatePicker 
+                    label="Fecha Ingreso"
+                    value={editFechaIngreso}
+                    onChange={setEditFechaIngreso}
+                  />
+                </div>
               </div>
             </div>
 

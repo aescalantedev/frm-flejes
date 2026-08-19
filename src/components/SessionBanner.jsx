@@ -122,6 +122,11 @@ export default function SessionBanner({
                         <div className="min-w-0">
                           <span className="font-bold text-sm text-foreground block">{tName}</span>
                           <span className="text-[10px] text-text-muted block mt-0.5 truncate">{tMedida}</span>
+                          {item.lote && (
+                            <span className="inline-flex w-fit items-center px-1.5 py-0.5 mt-1.5 rounded text-[9px] font-bold bg-accent/10 border border-accent/20 text-accent truncate" title={`Lote: ${item.lote}`}>
+                              Lote: {item.lote}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-3 ml-4 shrink-0">
                           <span className="text-base font-bold text-accent font-mono">{item.peso.toFixed(2)} kg</span>

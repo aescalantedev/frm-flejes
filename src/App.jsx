@@ -327,6 +327,9 @@ function App() {
             recepcion_id,
             producto_id,
             costo_kg_ingreso,
+            lote,
+            fecha_ingreso,
+            created_at,
             catalogo_productos(codigo, glosa, medida_corta)
           )
         `)
@@ -355,7 +358,10 @@ function App() {
           producto_id: f.producto_id,
           recepcion_id: f.recepcion_id,
           secuencia: f.secuencia,
-          costo_kg_ingreso: f.costo_kg_ingreso
+          costo_kg_ingreso: f.costo_kg_ingreso,
+          lote: f.lote,
+          fecha_ingreso: f.fecha_ingreso,
+          created_at: f.created_at
         }))
       }))
       return mapped
@@ -431,6 +437,7 @@ function App() {
         .from('historial_movimientos')
         .select(`
           id,
+          lote,
           ubicacion_id,
           ubicaciones(codigo_posicion),
           catalogo_productos(codigo, glosa, medida_corta),
@@ -451,6 +458,7 @@ function App() {
          medida: h.catalogo_productos?.medida_corta || 'Mixto',
          codigo: h.catalogo_productos?.codigo || '',
          glosa: h.catalogo_productos?.glosa || '',
+         lote: h.lote || null,
          peso_fleje: h.peso_kg,
          costo_kg_aplicado: h.costo_kg_aplicado,
          motivo: h.motivo,
@@ -663,6 +671,35 @@ function App() {
     })
   }
 
+  const handleReorderFleje = async (torreId, flejeId, direction) => {
+    if (isPublicView) return;
+    try {
+      const flejesEnTorre = inventarioMap[torreId] || [];
+      const currentIndex = flejesEnTorre.findIndex(f => f.id === flejeId);
+      if (currentIndex === -1) return;
+
+      const swapIndex = direction === 'up' ? currentIndex + 1 : currentIndex - 1;
+      if (swapIndex < 0 || swapIndex >= flejesEnTorre.length) return;
+
+      const f1 = flejesEnTorre[currentIndex];
+      const f2 = flejesEnTorre[swapIndex];
+
+      const sec1 = f1.secuencia;
+      const sec2 = f2.secuencia;
+
+      const { error: e1 } = await supabase.from('flejes').update({ secuencia: sec2 }).eq('id', f1.id);
+      const { error: e2 } = await supabase.from('flejes').update({ secuencia: sec1 }).eq('id', f2.id);
+
+      if (e1 || e2) throw new Error('Error actualizando secuencias');
+      
+      showToast(`Fleje movido ${direction === 'up' ? 'arriba' : 'abajo'}`);
+      queryClient.invalidateQueries({ queryKey: ['torres'] });
+    } catch (e) {
+      console.error(e);
+      showToast('Error al reordenar', true);
+    }
+  };
+
   // Abrir Modal de Ingreso en Lote
   const handleOpenBatchIngreso = (torreId, torreName, capMax, currentCount) => {
     const t = torres.find(x => x.id === torreId)
@@ -685,12 +722,13 @@ function App() {
     if (receptionSession) {
       const newItems = weightsList.map(item => ({
         torre_id: torreId,
-          peso: item.peso,
-          medida: item.medida,
-          producto_id: item.producto_id,
-          codigo: item.codigo,
-          costo_kg_aplicado: item.costo_kg_aplicado
-        }))
+        peso: item.peso,
+        medida: item.medida,
+        producto_id: item.producto_id,
+        codigo: item.codigo,
+        costo_kg_aplicado: item.costo_kg_aplicado,
+        lote: item.lote || null
+      }))
       setReceptionSession(prev => ({
         ...prev,
         items: [...prev.items, ...newItems]
@@ -726,9 +764,11 @@ function App() {
             ubicacion_id: torreId,
             peso_kg: item.peso,
             producto_id: item.producto_id,
-              costo_kg_ingreso: item.costo_kg_aplicado,
+            costo_kg_ingreso: item.costo_kg_aplicado,
             recepcion_id: recepcionId,
-            secuencia: baseSec + i + 1
+            secuencia: baseSec + i + 1,
+            lote: item.lote || null,
+            fecha_ingreso: new Date().toISOString()
           })))
         if (eInv) throw eInv
 
@@ -739,10 +779,11 @@ function App() {
             ubicacion_id: torreId,
             peso_kg: item.peso,
             producto_id: item.producto_id,
-              costo_kg_aplicado: item.costo_kg_aplicado,
+            costo_kg_aplicado: item.costo_kg_aplicado,
             motivo: 'Ajuste Ingreso',
             usuario: userProfile.name,
-            recepcion_id: recepcionId
+            recepcion_id: recepcionId,
+            lote: item.lote || null
           })))
         if (eHist) throw eHist
 
@@ -816,7 +857,9 @@ function App() {
               producto_id: item.producto_id,
               costo_kg_ingreso: item.costo_kg_aplicado,
               recepcion_id: recepcionId,
-              secuencia: secTracker[item.torre_id]
+              secuencia: secTracker[item.torre_id],
+              lote: item.lote || null,
+              fecha_ingreso: new Date().toISOString()
             }
           }))
         if (eInv) throw eInv
@@ -832,7 +875,8 @@ function App() {
               costo_kg_aplicado: item.costo_kg_aplicado,
               motivo: 'Ingreso',
               usuario: userProfile.name,
-              recepcion_id: recepcionId
+              recepcion_id: recepcionId,
+              lote: item.lote || null
             }
           }))
         if (eHist) throw eHist
@@ -878,7 +922,8 @@ function App() {
               motivo: session.motivo || 'Despacho',
               usuario: userProfile.name,
               recepcion_id: item.recepcion_id,
-              despacho_id: despachoId
+              despacho_id: despachoId,
+              lote: item.lote || null
             }
           }))
         if (eHist) throw eHist
@@ -913,7 +958,7 @@ function App() {
   }
 
   // Edit Strapping Band (Fleje) weight and/or medida
-  const handleEditarFleje = async (id, nuevoPeso, nuevoProductoId, nuevoCosto) => {
+  const handleEditarFleje = async (id, nuevoPeso, nuevoProductoId, nuevoCosto, nuevoLote, nuevaFechaIngreso) => {
     if (isNaN(nuevoPeso) || nuevoPeso <= 0) {
       showToast('El peso debe ser un número positivo', true)
       return false
@@ -924,6 +969,12 @@ function App() {
       if (nuevoProductoId !== undefined) {
         updateData.producto_id = nuevoProductoId
         if (nuevoCosto !== undefined) updateData.costo_kg_ingreso = nuevoCosto
+      }
+      if (nuevoLote !== undefined) {
+        updateData.lote = nuevoLote || null
+      }
+      if (nuevaFechaIngreso !== undefined) {
+        updateData.fecha_ingreso = nuevaFechaIngreso || null
       }
 
       const { error } = await supabase
@@ -1011,7 +1062,8 @@ function App() {
           producto_id: targetFleje.producto_id,
           motivo: trasladoData.motivo,
           usuario: trasladoData.despachador,
-          despacho_id: despachoId
+          despacho_id: despachoId,
+          lote: targetFleje.lote || null
         }])
 
       if (eHistorial) throw eHistorial
@@ -1181,6 +1233,7 @@ function App() {
               onStartDispatch={() => setDispatchInitOpen(true)}
               onOpenBatchIngreso={handleOpenBatchIngreso}
               onToggleSelectFleje={handleToggleSelectFleje}
+              onReorderFleje={handleReorderFleje}
               dispatchCart={dispatchSession?.items || []}
               showToast={showToast}
               userProfile={activeProfile}

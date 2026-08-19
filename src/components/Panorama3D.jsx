@@ -23,6 +23,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
   const [activeView, setActiveView] = useState('iso');
   const [focusedTowerData, setFocusedTowerData] = useState(null);
   const [focusedFlejeData, setFocusedFlejeData] = useState(null);
+  const [filtroFlejes, setFiltroFlejes] = useState('todas');
   
   const colors = { disponible: 0x6fb889, parcial: 0xd3aa28, ocupada: 0x6d93a3, sobrestock: 0xb95d5d };
 
@@ -195,9 +196,10 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
     const geoCarton = new THREE.CylinderGeometry(radioInterior, radioInterior, alturaRollo + 0.02, 32);
     const geoCartonTapa = new THREE.CylinderGeometry(radioExterior + 0.05, radioExterior + 0.05, 0.08, 32);
     
-    const metalBase = new THREE.MeshStandardMaterial({ color: 0x3f4547, roughness: 0.58, metalness: 0.78, transparent: true });
-    const metalTop = new THREE.MeshStandardMaterial({ color: 0x777d7d, roughness: 0.48, metalness: 0.68, transparent: true });
-    const metalMixed = new THREE.MeshStandardMaterial({ color: 0xb57053, roughness: 0.58, metalness: 0.78, transparent: true });
+    const metalBase = new THREE.MeshStandardMaterial({ color: 0x636e72, roughness: 0.4, metalness: 0.85, transparent: true });
+    const metalOxidado = new THREE.MeshStandardMaterial({ color: 0xba4125, roughness: 0.95, metalness: 0.2, transparent: true });
+    const metalTop = new THREE.MeshStandardMaterial({ color: 0x8a9296, roughness: 0.48, metalness: 0.68, transparent: true });
+    const metalMixed = new THREE.MeshStandardMaterial({ color: 0xcf7529, roughness: 0.5, metalness: 0.8, transparent: true });
     const palletMat = new THREE.MeshStandardMaterial({ color: 0x8a5c2e, roughness: 0.9, metalness: 0, transparent: true });
     const matCarton = new THREE.MeshStandardMaterial({ color: 0xab8663, roughness: 1.0, metalness: 0, transparent: true });
 
@@ -224,7 +226,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
       const ctx = c.getContext('2d');
       ctx.fillStyle = '#ab8663';
       ctx.fillRect(0, 0, 256, 256);
-      ctx.strokeStyle = isMixed ? '#b57053' : '#171b1d';
+      ctx.strokeStyle = isMixed ? '#cf7529' : '#171b1d';
       ctx.lineWidth = 10;
       ctx.beginPath();
       ctx.arc(128, 128, 123, 0, Math.PI * 2);
@@ -237,7 +239,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
       ctx.fillText(text, 0, isMixed ? -20 : 0);
       if (isMixed) {
           ctx.font = '900 28px monospace';
-          ctx.fillStyle = '#b57053';
+          ctx.fillStyle = '#cf7529';
           ctx.fillText('MIXTO', 0, 25);
       }
       const tex = new THREE.CanvasTexture(c);
@@ -249,7 +251,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         const c = document.createElement('canvas');
         c.width = 512; c.height = 64;
         const ctx = c.getContext('2d');
-        ctx.fillStyle = '#b57053';
+        ctx.fillStyle = '#cf7529';
         ctx.fillRect(0, 0, 512, 64);
         ctx.fillStyle = '#171b1d';
         ctx.font = '900 36px monospace';
@@ -264,24 +266,35 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         return tex;
     };
 
-    const makeInvSpriteTexture = (uds) => {
+    const makeInvSpriteTexture = (uds, medida = '') => {
         const c = document.createElement('canvas');
-        c.width = 128; c.height = 128; // Circular
+        c.width = 384; c.height = 100; 
         const ctx = c.getContext('2d');
         
         ctx.fillStyle = 'rgba(23, 27, 29, 0.9)';
         ctx.beginPath();
-        ctx.arc(64, 64, 60, 0, Math.PI * 2);
+        const r = 30;
+        ctx.moveTo(r, 0);
+        ctx.lineTo(384 - r, 0);
+        ctx.quadraticCurveTo(384, 0, 384, r);
+        ctx.lineTo(384, 100 - r);
+        ctx.quadraticCurveTo(384, 100, 384 - r, 100);
+        ctx.lineTo(r, 100);
+        ctx.quadraticCurveTo(0, 100, 0, 100 - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
         ctx.fill();
+        
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.lineWidth = 4;
         ctx.stroke();
 
-        ctx.font = '900 64px sans-serif';
+        ctx.font = '900 44px sans-serif';
         ctx.fillStyle = '#fff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(uds, 64, 68);
+        const text = medida ? `${medida} | ${uds}` : uds;
+        ctx.fillText(text, 192, 53);
 
         const tex = new THREE.CanvasTexture(c);
         tex.colorSpace = THREE.SRGBColorSpace;
@@ -371,13 +384,14 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
             }
         }
         engine.selectedTowerId = null;
-        if (engine.selectedFlejeMesh) {
-          engine.selectedFlejeMesh.material = metalBase.clone();
+        if (engine.selectedFlejeMesh && engine.selectedFlejeOriginalMat) {
+          engine.selectedFlejeMesh.material = engine.selectedFlejeOriginalMat;
           engine.selectedFlejeMesh = null;
+          engine.selectedFlejeOriginalMat = null;
         }
         // Restaurar atenuación
         if (engine.lastCapMaxMap && engine.lastFiltro) {
-            engine.updateBaseColors(engine.lastCapMaxMap, engine.lastFiltro);
+            engine.updateBaseColors(engine.lastCapMaxMap, engine.lastFiltro, engine.lastFiltroFlejes);
         }
       },
 
@@ -509,14 +523,14 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         scene.add(label);
         
         // --- NUEVA ETIQUETA INVENTARIO (Sprite Nativo Circular) ---
+        const initMedida = tData ? normalizeMedida(tData.nombre_medida) : '';
         const spriteMat = new THREE.SpriteMaterial({ 
-           map: makeInvSpriteTexture('0'), 
+           map: makeInvSpriteTexture('0', initMedida), 
            depthTest: true,
            sizeAttenuation: false
         });
         const invSprite = new THREE.Sprite(spriteMat);
-        // Escala reducida para que sea como un pequeño pin/insignia (aprox 2% alto pantalla)
-        invSprite.scale.set(0.02, 0.02, 1); 
+        invSprite.scale.set(0.065, 0.017, 1); 
         invSprite.position.set(x, 2.5, z); 
         scene.add(invSprite);
         // ----------------------------------------------------
@@ -542,6 +556,12 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         if (!t) return;
         const g = new THREE.Group();
         
+        // Calcular días en almacén
+        const fDate = flejeData.fecha_ingreso || flejeData.created_at;
+        const diff = fDate ? Math.floor((new Date() - new Date(fDate)) / (1000 * 60 * 60 * 24)) : 0;
+        const _dias = diff >= 0 ? diff : 0;
+        const isOld = _dias >= 30;
+
         const tData = torres.find(tw => tw.id === torreId);
         const m1 = normalizeMedida(flejeData.medida);
         const m2 = tData ? normalizeMedida(tData.nombre_medida) : '';
@@ -553,7 +573,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
             const sideM = new THREE.MeshStandardMaterial({ map: makeSideTexture(flejeData.medida), roughness: 0.58, metalness: 0.78, transparent: true });
             metalMats = [topM, sideM];
         } else {
-            metalMats = metalBase.clone();
+            metalMats = isOld ? metalOxidado.clone() : metalBase.clone();
         }
         
         const metal = new THREE.Mesh(geoRollo, metalMats);
@@ -574,16 +594,17 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         const y = 0.72 + i * 1.25;
         g.position.set(t.x, y, t.z);
         const costoValorizado = flejeData.peso * (parseFloat(flejeData.costo_kg_ingreso) || 0);
-        metal.userData = { ...flejeData, torreId, esMetal: true, numero: i + 1, costoValorizado };
+        metal.userData = { ...flejeData, torreId, esMetal: true, numero: i + 1, costoValorizado, _dias };
         g.userData.torreId = torreId;
         
         t.stack.push(g);
         scene.add(g);
         engine.allFlejes.push(metal);
       },
-      updateBaseColors: (capMaxMap, filtro = 'todas') => {
+      updateBaseColors: (capMaxMap, filtro = 'todas', fFlejes = 'todas') => {
           engine.lastCapMaxMap = capMaxMap;
           engine.lastFiltro = filtro;
+          engine.lastFiltroFlejes = fFlejes;
           
           Object.values(engine.allTowers).forEach(t => {
               const capMax = capMaxMap[t.id] || 5;
@@ -617,13 +638,25 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
               
               t.baseMesh.visible = true;
               t.stack.forEach(g => { 
+                  let isFlejeVisible = isVisible;
+                  
+                  if (isVisible && fFlejes && fFlejes !== 'todas') {
+                      const metal = g.children.find(ch => ch.userData && ch.userData.esMetal);
+                      const isMixed = g.userData.isMixed;
+                      const _dias = metal ? metal.userData._dias : 0;
+                      
+                      if (fFlejes === 'mixto' && !isMixed) isFlejeVisible = false;
+                      if (fFlejes === 'antiguo' && (_dias < 30 || isMixed)) isFlejeVisible = false;
+                      if (fFlejes === 'reciente' && (_dias >= 30 || isMixed)) isFlejeVisible = false;
+                  }
+
                   g.visible = true; 
                   g.children.forEach(mesh => {
                       if (mesh.isMesh) {
                           if (Array.isArray(mesh.material)) {
-                              mesh.material.forEach(m => { m.opacity = isVisible ? 1.0 : 0.15; });
+                              mesh.material.forEach(m => { m.opacity = isFlejeVisible ? 1.0 : 0.15; });
                           } else {
-                              mesh.material.opacity = isVisible ? 1.0 : 0.15;
+                              mesh.material.opacity = isFlejeVisible ? 1.0 : 0.15;
                           }
                       }
                   });
@@ -642,7 +675,9 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
                 if (t.lastCount !== n) {
                     t.lastCount = n;
                     if (t.invSprite.material.map) t.invSprite.material.map.dispose();
-                    t.invSprite.material.map = makeInvSpriteTexture(n.toString());
+                    const tData = torres.find(tw => tw.id === t.id);
+                    const currentMedida = tData ? normalizeMedida(tData.nombre_medida) : '';
+                    t.invSprite.material.map = makeInvSpriteTexture(n.toString(), currentMedida);
                 }
                 t.invSprite.visible = isVisible;
                 t.invSprite.material.opacity = isVisible ? 1.0 : 0.0; // Desaparece si hay filtro
@@ -786,6 +821,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
       const hitFleje = raycaster.intersectObjects(engine.allFlejes)[0];
       if (hitFleje && hitFleje.object.userData.torreId) {
         engine.selectTower(hitFleje.object.userData.torreId, true);
+        engine.selectedFlejeOriginalMat = hitFleje.object.material;
         engine.selectedFlejeMesh = hitFleje.object;
         hitFleje.object.material = new THREE.MeshStandardMaterial({ color: 0xc4a029, roughness: 0.5, metalness: 0.7, transparent: true });
         setFocusedFlejeData(hitFleje.object.userData);
@@ -928,10 +964,10 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         });
     });
 
-    engine.updateBaseColors(capMaxMap, filtroEstado);
+    engine.updateBaseColors(capMaxMap, filtroEstado, filtroFlejes);
     engine.updateBillboard(stats);
 
-  }, [torres, inventario, filtroEstado, stats]);
+  }, [torres, inventario, filtroEstado, filtroFlejes, stats]);
 
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden bg-bg shadow-sm border border-border">
@@ -1021,12 +1057,14 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
                     <p className="text-sm font-bold text-foreground font-mono">#{focusedFlejeData.numero || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Peso</p>
-                    <p className="text-sm font-bold text-foreground font-mono">{focusedFlejeData.peso ? focusedFlejeData.peso.toFixed(2) : '0'} kg</p>
+                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Lote / Días</p>
+                    <p className={`text-xs font-bold font-mono truncate ${focusedFlejeData._dias >= 30 ? 'text-danger' : 'text-foreground'}`}>
+                      {focusedFlejeData.lote || 'S/L'} <span className="text-[9px] ml-1">({focusedFlejeData._dias}d)</span>
+                    </p>
                   </div>
                   <div>
-                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Medida Específica</p>
-                    <p className="text-sm font-bold text-foreground font-mono truncate">{focusedFlejeData.medida || 'N/A'}</p>
+                    <p className="text-[9px] text-text-muted uppercase tracking-wider">Medida / Peso</p>
+                    <p className="text-sm font-bold text-foreground font-mono truncate">{focusedFlejeData.medida || 'N/A'} <span className="text-[10px] text-text-muted">{focusedFlejeData.peso ? focusedFlejeData.peso.toFixed(2) : '0'}kg</span></p>
                   </div>
                   <div>
                     <p className="text-[9px] text-text-muted uppercase tracking-wider">Costo Valorizado</p>
@@ -1075,29 +1113,60 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         </div>
       )}
       
-      <div className="absolute bottom-4 left-4 z-10 flex gap-2 bg-surface/90 backdrop-blur-md px-3 py-2 rounded-xl border border-border/50 shadow-lg">
-         {filtroEstado !== 'todas' && (
-           <button
-             onClick={() => setFiltroEstado && setFiltroEstado('todas')}
-             className="flex items-center text-[10px] font-bold px-2 py-1 rounded-lg text-danger hover:bg-danger/10 transition-all border-r border-border/50 mr-1 pr-3"
-           >
-             Limpiar Filtro
-           </button>
-         )}
-         {[
-           { id: 'vacias', label: 'Vacías', color: '#6fb889' },
-           { id: 'parciales', label: 'Parciales', color: '#d3aa28' },
-           { id: 'llenas', label: 'Llenas/Sobre', color: '#6d93a3' }
-         ].map(item => (
-            <button 
-              key={item.id}
-              onClick={() => setFiltroEstado && setFiltroEstado(prev => prev === item.id ? 'todas' : item.id)}
-              className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${filtroEstado === item.id ? 'bg-surface-hover text-foreground shadow-sm' : 'text-text-muted hover:text-foreground hover:bg-surface-hover/50'}`}
-            >
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></span> 
-              {item.label}
-            </button>
-         ))}
+      <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-2">
+        {/* Leyenda y Filtros de Flejes */}
+        <div className="flex gap-2 bg-surface/90 backdrop-blur-md px-3 py-2 rounded-xl border border-border/50 shadow-lg">
+           <span className="text-[10px] font-bold text-text-muted px-2 py-1 border-r border-border/50 mr-1 pr-3 flex items-center">ESTADO FLEJES</span>
+           {filtroFlejes !== 'todas' && (
+             <button
+               onClick={() => setFiltroFlejes('todas')}
+               className="flex items-center text-[10px] font-bold px-2 py-1 rounded-lg text-danger hover:bg-danger/10 transition-all border-r border-border/50 mr-1 pr-3"
+             >
+               Limpiar Filtro
+             </button>
+           )}
+           {[
+             { id: 'reciente', label: 'Reciente (< 30d)', color: '#636e72' },
+             { id: 'antiguo', label: 'Antiguo (≥ 30d)', color: '#ba4125' },
+             { id: 'mixto', label: 'Medida Mixta', color: '#cf7529' }
+           ].map(item => (
+              <button 
+                key={item.id}
+                onClick={() => setFiltroFlejes(prev => prev === item.id ? 'todas' : item.id)}
+                className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${filtroFlejes === item.id ? 'bg-surface-hover text-foreground shadow-sm' : 'text-text-muted hover:text-foreground hover:bg-surface-hover/50'}`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></span> 
+                {item.label}
+              </button>
+           ))}
+        </div>
+        
+        {/* Leyenda y Filtros de Torre */}
+        <div className="flex gap-2 bg-surface/90 backdrop-blur-md px-3 py-2 rounded-xl border border-border/50 shadow-lg">
+           <span className="text-[10px] font-bold text-text-muted px-2 py-1 border-r border-border/50 mr-1 pr-3 flex items-center">ESTADO TORRE</span>
+           {filtroEstado !== 'todas' && (
+             <button
+               onClick={() => setFiltroEstado && setFiltroEstado('todas')}
+               className="flex items-center text-[10px] font-bold px-2 py-1 rounded-lg text-danger hover:bg-danger/10 transition-all border-r border-border/50 mr-1 pr-3"
+             >
+               Limpiar Filtro
+             </button>
+           )}
+           {[
+             { id: 'vacias', label: 'Vacías', color: '#6fb889' },
+             { id: 'parciales', label: 'Parciales', color: '#d3aa28' },
+             { id: 'llenas', label: 'Llenas/Sobre', color: '#6d93a3' }
+           ].map(item => (
+              <button 
+                key={item.id}
+                onClick={() => setFiltroEstado && setFiltroEstado(prev => prev === item.id ? 'todas' : item.id)}
+                className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${filtroEstado === item.id ? 'bg-surface-hover text-foreground shadow-sm' : 'text-text-muted hover:text-foreground hover:bg-surface-hover/50'}`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></span> 
+                {item.label}
+              </button>
+           ))}
+        </div>
       </div>
     </div>
   );
