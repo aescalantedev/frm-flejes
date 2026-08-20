@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer';
 import gsap from 'gsap';
 import { Maximize, Minimize, Map, Info, Box } from 'lucide-react';
+import { useUnitSystem } from '../hooks/useUnitSystem';
 
 const normalizeMedida = (m) => {
   if (!m) return '';
@@ -18,6 +19,7 @@ const normalizeMedida = (m) => {
 };
 
 export default function Panorama3D({ torres, inventario, onSelectTorre, stats, filtroEstado, setFiltroEstado, catalogoCostos = [] }) {
+  const { isTN } = useUnitSystem();
   const mountRef = useRef(null);
   const engineRef = useRef(null);
   const [activeView, setActiveView] = useState('iso');
@@ -701,7 +703,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
           });
       },
       
-      updateBillboard: (statsObj) => {
+      updateBillboard: (statsObj, currentIsTN) => {
         if (!statsObj) return;
         
         // --- 1. ACTUALIZAR PANEL DERECHO (STATS) ---
@@ -750,54 +752,77 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
         Object.values(inventario).forEach(flejes => {
             flejes.forEach(f => {
                 const med = normalizeMedida(f.medida) || 'OTRO';
-                if(!invSummary[med]) invSummary[med] = { count: 0, valor: 0 };
+                if(!invSummary[med]) invSummary[med] = { count: 0, valor: 0, pesoTotal: 0 };
                 invSummary[med].count += 1;
                 invSummary[med].valor += (f.peso * (parseFloat(f.costo_kg_ingreso) || 0));
+                invSummary[med].pesoTotal += (f.peso || 0);
             });
         });
 
-        // Ordenar por cantidad descendente
         const items = Object.entries(invSummary).sort((a,b) => b[1].count - a[1].count);
         
+        // Paginación
+        const maxRows = 10;
+        const totalPages = Math.ceil(items.length / maxRows);
+        let currentPage = engine.invPage || 0;
+        if (currentPage >= totalPages) {
+            currentPage = 0;
+            engine.invPage = 0;
+        }
+
+        const startIndex = currentPage * maxRows;
+        const pageItems = items.slice(startIndex, startIndex + maxRows);
+
         // Cabeceras de Tabla
         bbCtxInv.font = 'bold 28px monospace';
         bbCtxInv.fillStyle = '#8a9194';
+        
         bbCtxInv.textAlign = 'left';
-        bbCtxInv.fillText('MEDIDA', 80, 150);
+        bbCtxInv.fillText('MEDIDA', 50, 150);
+        
         bbCtxInv.textAlign = 'center';
-        bbCtxInv.fillText('CANTIDAD', 512, 150);
+        bbCtxInv.fillText('CANTIDAD', 320, 150);
+        
+        bbCtxInv.textAlign = 'center';
+        bbCtxInv.fillText(currentIsTN ? 'PESO (TN)' : 'PESO (KG)', 600, 150);
+
         bbCtxInv.textAlign = 'right';
-        bbCtxInv.fillText('VALORIZACION (S/)', 944, 150);
+        bbCtxInv.fillText('VALOR (S/)', 980, 150);
         
         bbCtxInv.fillStyle = '#3f4547';
-        bbCtxInv.fillRect(60, 170, 904, 4);
+        bbCtxInv.fillRect(40, 170, 950, 4);
 
         let y = 250;
-        const maxRows = 10; // Reducido para que no se corte al fondo
-        for (let i = 0; i < Math.min(items.length, maxRows); i++) {
-            const [med, data] = items[i];
+        for (let i = 0; i < pageItems.length; i++) {
+            const [med, data] = pageItems[i];
             
             bbCtxInv.fillStyle = '#fff';
-            bbCtxInv.font = 'bold 42px monospace';
+            bbCtxInv.font = 'bold 36px monospace'; 
             bbCtxInv.textAlign = 'left';
-            bbCtxInv.fillText(med, 80, y);
+            bbCtxInv.fillText(med, 50, y);
             
             bbCtxInv.textAlign = 'center';
-            bbCtxInv.fillText(data.count + ' uds', 512, y);
+            bbCtxInv.fillText(data.count + ' uds', 320, y);
+
+            // Columna de peso
+            bbCtxInv.fillStyle = '#d7a916'; 
+            const pesoVal = currentIsTN ? (data.pesoTotal / 1000) : data.pesoTotal;
+            const pesoStr = pesoVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            bbCtxInv.fillText(pesoStr, 600, y);
             
             bbCtxInv.fillStyle = '#6fb889';
             bbCtxInv.textAlign = 'right';
             const valStr = data.valor.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            bbCtxInv.fillText(valStr, 944, y);
+            bbCtxInv.fillText(valStr, 980, y);
             
             y += 65;
         }
 
-        if (items.length > maxRows) {
+        if (totalPages > 1) {
             bbCtxInv.fillStyle = '#8a9194';
-            bbCtxInv.font = 'bold 28px sans-serif';
+            bbCtxInv.font = 'bold 24px sans-serif';
             bbCtxInv.textAlign = 'center';
-            bbCtxInv.fillText(`... y ${items.length - maxRows} medidas más`, 512, y + 5);
+            bbCtxInv.fillText(`Página ${currentPage + 1} de ${totalPages} (Click para ver más)`, 512, 960);
         }
 
         bbTexInv.needsUpdate = true;
@@ -843,12 +868,23 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
           const targetPos = new THREE.Vector3();
           mesh.getWorldPosition(targetPos);
           
+          const isInvPanel = mesh.geometry.parameters.height > 30; // 42 vs 22
+          const dist = isInvPanel ? 50 : 32;
+          
+          // Verificar si ya estamos con zoom en el panel
+          const distToCamera = camera.position.distanceTo(targetPos);
+          const isZoomedIn = distToCamera < dist + 5; 
+
+          // Paginación: solo si está de cerca y hace click en la parte inferior (Y < 0.2 en UV)
+          if (isInvPanel && isZoomedIn && hitInteractable.uv && hitInteractable.uv.y < 0.20) {
+              engine.invPage = (engine.invPage || 0) + 1;
+              engine.updateBillboard(engine.latestStats, engine.latestIsTN);
+              return; // No animar cámara de nuevo
+          }
+
           const worldQuat = new THREE.Quaternion();
           mesh.getWorldQuaternion(worldQuat);
           const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(worldQuat).normalize();
-          
-          const isInvPanel = mesh.geometry.parameters.height > 30; // 42 vs 22
-          const dist = isInvPanel ? 50 : 32; 
           
           const camTarget = targetPos.clone().add(normal.multiplyScalar(dist));
           
@@ -965,9 +1001,12 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
     });
 
     engine.updateBaseColors(capMaxMap, filtroEstado, filtroFlejes);
-    engine.updateBillboard(stats);
+    
+    engine.latestStats = stats;
+    engine.latestIsTN = isTN;
+    engine.updateBillboard(stats, isTN);
 
-  }, [torres, inventario, filtroEstado, filtroFlejes, stats]);
+  }, [torres, inventario, filtroEstado, filtroFlejes, stats, isTN]);
 
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden bg-bg shadow-sm border border-border">
@@ -1064,7 +1103,7 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
                   </div>
                   <div>
                     <p className="text-[9px] text-text-muted uppercase tracking-wider">Medida / Peso</p>
-                    <p className="text-sm font-bold text-foreground font-mono truncate">{focusedFlejeData.medida || 'N/A'} <span className="text-[10px] text-text-muted">{focusedFlejeData.peso ? focusedFlejeData.peso.toFixed(2) : '0'}kg</span></p>
+                    <p className="text-sm font-bold text-foreground font-mono truncate">{focusedFlejeData.medida || 'N/A'} <span className="text-[10px] text-text-muted">{focusedFlejeData.peso ? (isTN ? (focusedFlejeData.peso / 1000).toFixed(2) + ' tn' : focusedFlejeData.peso.toFixed(2) + ' kg') : (isTN ? '0 tn' : '0 kg')}</span></p>
                   </div>
                   <div>
                     <p className="text-[9px] text-text-muted uppercase tracking-wider">Costo Valorizado</p>
