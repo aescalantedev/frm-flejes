@@ -405,13 +405,110 @@ const formatDuration = (start, end) => {
   return `${diffHours} hora${diffHours !== 1 ? 's' : ''} y ${remMins} min${remMins !== 1 ? 's' : ''}`
 }
 
-export default function HistorialView({ historial = [], activeSessions = [], userProfile, isLoading }) {
+// =========================================================================
+// COMPONENTE: Modal de Corrección
+// =========================================================================
+function CorrectionModal({ isOpen, onClose, onConfirm, items, catalogoProductos }) {
+  const [nuevoProductoId, setNuevoProductoId] = useState('')
+  const [motivo, setMotivo] = useState('')
+
+  useEffect(() => {
+    if (isOpen) {
+      setNuevoProductoId('')
+      setMotivo('')
+    }
+  }, [isOpen])
+
+  if (!isOpen || !items || items.length === 0) return null
+
+  const isBulk = items.length > 1
+  
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!nuevoProductoId || !motivo.trim()) return
+    onConfirm(items, nuevoProductoId, motivo.trim())
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+      <div className="bg-surface border border-border w-full max-w-md rounded-2xl overflow-hidden shadow-xl flex flex-col">
+        <div className="px-5 py-4 border-b border-border flex justify-between items-center bg-bg/40">
+          <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-warning animate-pulse" />
+            {isBulk ? 'Corregir Todo el Lote' : 'Corregir Registro de Fleje'}
+          </h2>
+          <button onClick={onClose} className="p-1 rounded-lg text-text-muted hover:text-foreground hover:bg-surface-hover transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div className="bg-warning/10 border border-warning/20 rounded-xl p-3 text-xs text-warning font-medium">
+            Estás a punto de alterar el historial de auditoría de {isBulk ? `${items.length} registros` : '1 registro'}. Esta acción quedará grabada.
+          </div>
+          
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Nueva Medida Correcta</label>
+            <select
+              value={nuevoProductoId}
+              onChange={(e) => setNuevoProductoId(e.target.value)}
+              className="w-full bg-bg border border-border text-foreground rounded-xl px-3 py-2.5 text-xs outline-none focus:border-accent"
+              required
+            >
+              <option value="">-- Seleccionar --</option>
+              {catalogoProductos?.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.medida_corta || p.medida} {p.codigo ? `(${p.codigo})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-danger uppercase tracking-wider">Motivo de la corrección (Requerido)</label>
+            <textarea
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              required
+              rows={3}
+              placeholder="Ej: Se registró erróneamente como 284x2 por falta de actualización de la torre..."
+              className="w-full bg-bg border border-border focus:border-danger text-foreground rounded-xl p-3 text-xs outline-none resize-none"
+            />
+          </div>
+          
+          <div className="pt-2 flex gap-3">
+            <button type="button" onClick={onClose} className="flex-1 bg-bg border border-border hover:bg-surface-hover text-foreground font-semibold py-2.5 rounded-xl text-xs cursor-pointer transition-colors">
+              Cancelar
+            </button>
+            <button type="submit" disabled={!nuevoProductoId || !motivo.trim()} className="flex-1 bg-warning hover:bg-warning-hover text-warning-foreground font-semibold py-2.5 rounded-xl text-xs cursor-pointer transition-colors disabled:opacity-50 text-white">
+              Aplicar Corrección
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+export default function HistorialView({ historial = [], activeSessions = [], userProfile, isLoading, catalogoProductos, onCorregir }) {
   const [filtroTipo, setFiltroTipo] = useState('todos')
   const [filtroTorre, setFiltroTorre] = useState('todos')
   const [fechaFiltro, setFechaFiltro] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [activeTx, setActiveTx] = useState(null)
-    const { isTN } = useUnitSystem()
+  const [correctionItems, setCorrectionItems] = useState(null)
+  const { isTN } = useUnitSystem()
+
+  const handleConfirmCorrection = async (items, nuevoProdId, motivo) => {
+    if (onCorregir) {
+      const success = await onCorregir(items, nuevoProdId, motivo)
+      if (success) {
+        // Optimistically hide drawer or refresh it, we'll just close the active Tx to force a refresh UX
+        setActiveTx(null)
+      }
+    }
+  }
 
   if (isLoading) {
     return (
@@ -923,9 +1020,20 @@ export default function HistorialView({ historial = [], activeSessions = [], use
                         <span className="font-bold text-foreground block">
                           {item.posicion || 'Al Piso'}
                         </span>
-                        <span className="text-[10px] text-text-muted font-mono block mt-0.5">
-                          {item.medida || 'Suelto'}
-                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] text-text-muted font-mono block">
+                            {item.medida || 'Suelto'}
+                          </span>
+                          {userProfile?.rol === 'Administrador' && (
+                            <button
+                              onClick={() => setCorrectionItems([item])}
+                              className="text-text-muted hover:text-warning transition-colors bg-surface border border-border rounded-md px-1.5 py-0.5 text-[9px] cursor-pointer"
+                              title="Corregir medida de este fleje"
+                            >
+                              ✏️
+                            </button>
+                          )}
+                        </div>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
                           {item.glosa && (
                             <span className="inline-flex w-fit items-center px-2 py-0.5 rounded text-[9px] font-medium bg-surface border border-border text-text-muted/90 truncate max-w-[150px]" title={item.glosa}>
@@ -990,18 +1098,33 @@ export default function HistorialView({ historial = [], activeSessions = [], use
               )}
             </div>
 
-            <div className="p-5 border-t border-border bg-bg/20 shrink-0">
+            <div className="p-5 border-t border-border bg-bg/20 shrink-0 flex gap-3">
               <button 
                 onClick={() => setActiveTx(null)}
-                className="w-full bg-surface border border-border hover:bg-surface-hover text-foreground font-semibold py-2.5 rounded-xl text-xs cursor-pointer transition-colors text-center active:scale-98"
+                className="flex-1 bg-surface border border-border hover:bg-surface-hover text-foreground font-semibold py-2.5 rounded-xl text-xs cursor-pointer transition-colors text-center active:scale-98"
               >
                 Cerrar Detalle
               </button>
+              {userProfile?.rol === 'Administrador' && activeTx.items.length > 1 && (
+                <button 
+                  onClick={() => setCorrectionItems(activeTx.items)}
+                  className="flex-1 bg-warning/10 border border-warning/30 hover:bg-warning/20 text-warning font-semibold py-2.5 rounded-xl text-xs cursor-pointer transition-colors text-center active:scale-98 flex items-center justify-center gap-1.5"
+                >
+                  <span>✏️</span> Corregir Lote Completo
+                </button>
+              )}
             </div>
           </div>
         </>
       )}
-
+      
+      <CorrectionModal 
+        isOpen={!!correctionItems}
+        items={correctionItems}
+        onClose={() => setCorrectionItems(null)}
+        onConfirm={handleConfirmCorrection}
+        catalogoProductos={catalogoProductos}
+      />
     </div>
   )
 }

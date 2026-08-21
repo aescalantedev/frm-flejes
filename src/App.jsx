@@ -443,7 +443,7 @@ function App() {
           catalogo_productos(codigo, glosa, medida_corta),
           peso_kg,
           costo_kg_aplicado,
-          motivo, usuario, recepcion_id, despacho_id, created_at,
+          motivo, usuario, recepcion_id, despacho_id, fleje_id, created_at,
           recepciones(*), despachos(*)
         `)
         .order('created_at', { ascending: false })
@@ -465,6 +465,8 @@ function App() {
          usuario: h.usuario,
          recepcion_id: h.recepcion_id,
          despacho_id: h.despacho_id,
+         fleje_id: h.fleje_id,
+         producto_id: h.producto_id,
          recepciones: h.recepciones,
          despachos: h.despachos,
          created_at: h.created_at
@@ -758,7 +760,7 @@ function App() {
         const currentFlejes = inventarioMap[torreId] || []
         const baseSec = currentFlejes.length > 0 ? Math.max(...currentFlejes.map(f => f.secuencia || 0)) : 0
 
-        const { error: eInv } = await supabase
+        const { data: invData, error: eInv } = await supabase
           .from('flejes')
           .insert(weightsList.map((item, i) => ({
             ubicacion_id: torreId,
@@ -770,12 +772,13 @@ function App() {
             lote: item.lote || null,
             fecha_ingreso: new Date().toISOString()
           })))
+          .select()
         if (eInv) throw eInv
 
-        // 3. Insertar en historial vinculando recepcion_id
+        // 3. Insertar en historial vinculando recepcion_id y fleje_id
         const { error: eHist } = await supabase
           .from('historial_movimientos')
-          .insert(weightsList.map(item => ({
+          .insert(weightsList.map((item, i) => ({
             ubicacion_id: torreId,
             peso_kg: item.peso,
             producto_id: item.producto_id,
@@ -783,7 +786,8 @@ function App() {
             motivo: 'Ajuste Ingreso',
             usuario: userProfile.name,
             recepcion_id: recepcionId,
-            lote: item.lote || null
+            lote: item.lote || null,
+            fleje_id: invData[i].id
           })))
         if (eHist) throw eHist
 
@@ -842,7 +846,7 @@ function App() {
 
         // 2. Insertar en Inventario
         const secTracker = {}
-        const { error: eInv } = await supabase
+        const { data: invData, error: eInv } = await supabase
           .from('flejes')
           .insert(session.items.map(item => {
             if (secTracker[item.torre_id] === undefined) {
@@ -862,12 +866,13 @@ function App() {
               fecha_ingreso: new Date().toISOString()
             }
           }))
+          .select()
         if (eInv) throw eInv
 
         // 3. Insertar en Historial
         const { error: eHist } = await supabase
           .from('historial_movimientos')
-          .insert(session.items.map(item => {
+          .insert(session.items.map((item, i) => {
             return {
               ubicacion_id: item.torre_id,
               peso_kg: item.peso,
@@ -876,7 +881,8 @@ function App() {
               motivo: 'Ingreso',
               usuario: userProfile.name,
               recepcion_id: recepcionId,
-              lote: item.lote || null
+              lote: item.lote || null,
+              fleje_id: invData[i].id
             }
           }))
         if (eHist) throw eHist
@@ -923,7 +929,8 @@ function App() {
               usuario: userProfile.name,
               recepcion_id: item.recepcion_id,
               despacho_id: despachoId,
-              lote: item.lote || null
+              lote: item.lote || null,
+              fleje_id: item.id
             }
           }))
         if (eHist) throw eHist
@@ -1063,7 +1070,8 @@ function App() {
           motivo: trasladoData.motivo,
           usuario: trasladoData.despachador,
           despacho_id: despachoId,
-          lote: targetFleje.lote || null
+          lote: targetFleje.lote || null,
+          fleje_id: targetFleje.id
         }])
 
       if (eHistorial) throw eHistorial
@@ -1077,6 +1085,64 @@ function App() {
     } catch (e) {
       console.error(e)
       showToast('Error al registrar la salida', true)
+      return false
+    }
+  }
+
+  const handleCorregirHistorial = async (registros, nuevoProductoId, motivo) => {
+    try {
+      if (!registros || registros.length === 0) return false
+      
+      const updatePromises = registros.map(async (reg) => {
+        // 1. Actualizar la fila actual en el historial
+        const { error: e1 } = await supabase
+          .from('historial_movimientos')
+          .update({ producto_id: nuevoProductoId })
+          .eq('id', reg.id)
+        if (e1) throw e1
+
+        // 2. Insertar log de auditoría
+        const oldVal = { codigo: reg.codigo, medida: reg.medida }
+        const newVal = { producto_id: nuevoProductoId }
+        
+        await supabase.from('auditoria_correcciones').insert({
+          tabla_afectada: 'historial_movimientos',
+          registro_id: reg.id,
+          motivo: motivo,
+          valor_anterior: oldVal,
+          valor_nuevo: newVal,
+          usuario: userProfile.name
+        })
+
+        // 3. Auto-sincronización (si tiene fleje_id)
+        if (reg.fleje_id) {
+           await supabase.from('flejes').update({ producto_id: nuevoProductoId }).eq('id', reg.fleje_id)
+           
+           const { data: siblingData } = await supabase.from('historial_movimientos').select('id, producto_id').eq('fleje_id', reg.fleje_id).neq('id', reg.id)
+           if (siblingData && siblingData.length > 0) {
+             for (const sib of siblingData) {
+               await supabase.from('historial_movimientos').update({ producto_id: nuevoProductoId }).eq('id', sib.id)
+               await supabase.from('auditoria_correcciones').insert({
+                 tabla_afectada: 'historial_movimientos (Auto-sync)',
+                 registro_id: sib.id,
+                 motivo: 'Auto-sync por corrección: ' + motivo,
+                 valor_anterior: { producto_id: sib.producto_id },
+                 valor_nuevo: newVal,
+                 usuario: 'SYSTEM'
+               })
+             }
+           }
+        }
+      })
+      
+      await Promise.all(updatePromises)
+      showToast('Corrección aplicada exitosamente')
+      queryClient.invalidateQueries({ queryKey: ['torres'] })
+      queryClient.invalidateQueries({ queryKey: ['historial'] })
+      return true
+    } catch (e) {
+      console.error(e)
+      showToast('Error al aplicar la corrección', true)
       return false
     }
   }
@@ -1261,6 +1327,8 @@ function App() {
               activeSessions={activeSessions}
               userProfile={activeProfile}
               isLoading={loadingHistorial}
+              catalogoProductos={catalogoProductos}
+              onCorregir={handleCorregirHistorial}
             />
           )}
 
