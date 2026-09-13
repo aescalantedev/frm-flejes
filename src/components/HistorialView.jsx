@@ -305,8 +305,30 @@ const groupHistory = (items) => {
   const groups = {}
   
   items.forEach(m => {
+    const motivoLower = m.motivo?.toLowerCase() || ''
+    const isTransfer = motivoLower.includes('traslado')
+    const isSalida = motivoLower.includes('salida') || motivoLower.includes('consumo') || motivoLower.includes('devolución')
+
+    // Si es un traslado interno, debe ser un evento independiente (no agrupar en recepción/despacho)
+    if (isTransfer) {
+      const key = `adj_${m.id}`
+      groups[key] = {
+        id: m.id,
+        type: 'transfer',
+        title: 'Traslado Interno',
+        motivo: m.motivo, // <- Aquí está la info de "Desde X torre"
+        despachador: m.usuario || 'Desconocido',
+        num_solicitud: m.num_solicitud,
+        destino: m.destino || null,
+        hora_inicio: m.hora_inicio || m.created_at,
+        created_at: m.created_at,
+        observaciones: m.observaciones || '',
+        fotos: [],
+        items: [m]
+      }
+    }
     // IMPORTANTE: Primero comprobar despacho_id, porque un despacho mantiene el recepcion_id para la trazabilidad
-    if (m.despacho_id) {
+    else if (m.despacho_id) {
       const key = `desp_${m.despacho_id}`
       if (!groups[key]) {
         groups[key] = {
@@ -351,17 +373,11 @@ const groupHistory = (items) => {
       groups[key].items.push(m)
     } else {
       const key = `adj_${m.id}`
-      const motivoLower = m.motivo?.toLowerCase() || ''
-      const isTransfer = motivoLower.includes('traslado')
-      const isSalida = motivoLower.includes('salida') || motivoLower.includes('consumo') || motivoLower.includes('devolución')
       
       let type = 'adjustment'
       let title = m.motivo || 'Ajuste Manual'
       
-      if (isTransfer) {
-        type = 'transfer'
-        title = 'Traslado Interno'
-      } else if (isSalida) {
+      if (isSalida) {
         type = 'dispatch'
         title = m.motivo || 'Despacho / Consumo'
       }
@@ -370,6 +386,7 @@ const groupHistory = (items) => {
         id: m.id,
         type,
         title,
+        motivo: m.motivo,
         despachador: m.usuario || 'Desconocido',
         num_solicitud: m.num_solicitud,
         destino: m.destino || null,
@@ -954,17 +971,47 @@ export default function HistorialView({ historial = [], activeSessions = [], use
                       <p className="font-semibold text-foreground truncate">{activeTx.destino}</p>
                     </div>
                   )}
-                  {activeTx.type !== 'reception' && activeTx.type !== 'dispatch' && activeTx.destino && (
-                    <div className="col-span-2 sm:col-span-1">
-                      <span className="text-text-muted text-[10px] block mb-0.5">Destino de Salida:</span>
-                      <p className="font-semibold text-foreground truncate">{activeTx.destino}</p>
+                  {activeTx.type === 'transfer' ? (
+                    <div className="col-span-2 bg-info/5 border border-info/20 rounded-2xl p-4 flex items-center justify-between shadow-xs mb-2 mt-1">
+                      <div className="flex flex-col items-center flex-1">
+                        <span className="text-[10px] text-info/80 uppercase font-bold mb-2 tracking-wider">Torre Origen</span>
+                        <div className="bg-bg border border-border px-6 py-3 rounded-xl shadow-inner w-full max-w-[130px] text-center">
+                          <span className="text-2xl font-black text-text-muted font-mono">
+                            {activeTx.motivo?.match(/\(Desde (.*?)\)/i)?.[1] || '?'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-col items-center justify-center px-4">
+                        <div className="w-12 h-12 rounded-full bg-info/10 text-info flex items-center justify-center relative">
+                          <ArrowRightLeft className="w-6 h-6" />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-center flex-1">
+                        <span className="text-[10px] text-info uppercase font-bold mb-2 tracking-wider">Torre Destino</span>
+                        <div className="bg-info border border-info/50 px-6 py-3 rounded-xl shadow-md w-full max-w-[130px] text-center">
+                          <span className="text-2xl font-black text-white font-mono drop-shadow-sm">
+                            {activeTx.items[0]?.posicion || '?'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                  {activeTx.type !== 'reception' && (
-                    <div>
-                      <span className="text-text-muted text-[10px] block mb-0.5">Motivo / Operación:</span>
-                      <p className="font-semibold text-foreground">{activeTx.motivo || activeTx.title}</p>
-                    </div>
+                  ) : (
+                    <>
+                      {activeTx.type !== 'reception' && activeTx.type !== 'dispatch' && activeTx.destino && (
+                        <div className="col-span-2 sm:col-span-1">
+                          <span className="text-text-muted text-[10px] block mb-0.5">Destino de Salida:</span>
+                          <p className="font-semibold text-foreground truncate">{activeTx.destino}</p>
+                        </div>
+                      )}
+                      {activeTx.type !== 'reception' && (
+                        <div>
+                          <span className="text-text-muted text-[10px] block mb-0.5">Motivo / Operación:</span>
+                          <p className="font-semibold text-foreground">{activeTx.motivo || activeTx.title}</p>
+                        </div>
+                      )}
+                    </>
                   )}
                   <div>
                     <span className="text-text-muted text-[10px] block mb-0.5">Guía / Solicitud:</span>

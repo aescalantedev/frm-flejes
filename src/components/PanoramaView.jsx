@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Plus, Truck, Send, Check, Box, Grid, ChevronUp, ChevronDown, Clock } from 'lucide-react'
+import { Plus, Truck, Send, Check, Box, Grid, ChevronUp, ChevronDown, Clock, ArrowRightLeft, X } from 'lucide-react'
 import { useUnitSystem } from '../hooks/useUnitSystem'
 import Panorama3D from './Panorama3D'
 
@@ -36,30 +36,41 @@ export default function PanoramaView({
   showToast,
   catalogoCostos = [],
   userProfile,
-  isPublicView
+  isPublicView,
+  transferSession,
+  setTransferSession,
+  onStartTransfer,
+  onCancelTransfer,
+  onExecuteTransfer
 }) {
   const { isTN } = useUnitSystem()
   const [filtroEstado, setFiltroEstado] = useState('todas')
   const [viewMode, setViewMode] = useState('2d')
 
-  // Observer para mostrar FABs solo al hacer scroll
-  const topButtonsRef = useRef(null)
-  const [showFABs, setShowFABs] = useState(false)
-
-  useEffect(() => {
-    if (!topButtonsRef.current) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setShowFABs(!entry.isIntersecting)
-      },
-      { threshold: 0 }
-    )
-    observer.observe(topButtonsRef.current)
-    return () => observer.disconnect()
-  }, [])
-
   const receptionActive = !!receptionSession
   const dispatchActive = !!dispatchSession
+  const transferActive = transferSession?.active
+
+  // Observer para mostrar FABs solo al hacer scroll (A prueba de fallos con Callback Ref)
+  const [showFABs, setShowFABs] = useState(false)
+  const observerRef = useRef(null)
+
+  const topButtonsRef = React.useCallback((node) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+    }
+    if (node) {
+      observerRef.current = new IntersectionObserver(
+        ([entry]) => {
+          setShowFABs(!entry.isIntersecting)
+        },
+        { threshold: 0 }
+      )
+      observerRef.current.observe(node)
+    } else {
+      setShowFABs(false)
+    }
+  }, [])
 
   // RENDER SKELETON LOADER
   if (isLoading) {
@@ -273,8 +284,30 @@ export default function PanoramaView({
       </div>
 
       {/* Operaciones Rápidas de Almacén (Solo visibles si no hay sesión activa, no está cargando y no es vista pública) */}
-      {!receptionActive && !dispatchActive && !isPublicView && (
-        <div ref={topButtonsRef} className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-2 animate-fadeIn">
+      {transferActive && (
+        <div className="bg-info/10 border border-info/40 rounded-2xl p-4 flex items-center justify-between mb-4 animate-slideDown">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-info text-white flex items-center justify-center shrink-0 shadow-md">
+              <ArrowRightLeft className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-info">Modo Traslado Interno</h3>
+              <p className="text-xs text-text-muted mt-0.5">
+                {transferSession?.step === 'select_source' ? 'Toca el fleje que deseas trasladar (o arrástralo desde PC).' : 'Selecciona la torre de destino para el fleje.'}
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={onCancelTransfer}
+            className="w-10 h-10 rounded-xl hover:bg-info/20 text-info flex items-center justify-center transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
+      {!receptionActive && !dispatchActive && !transferActive && !isPublicView && (
+        <div ref={topButtonsRef} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pb-2 animate-fadeIn">
           <button 
             onClick={onStartReception}
             className="bg-accent/5 border border-accent/25 hover:border-accent/40 hover:bg-accent/10 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all active:scale-98 shadow-xs text-left group min-h-[72px]"
@@ -285,7 +318,7 @@ export default function PanoramaView({
               </div>
               <div>
                 <h3 className="text-xs font-bold text-foreground">Recepción de Camión</h3>
-                <p className="text-[10px] text-text-muted mt-0.5">Ingresar lote de flejes (directo a torres o al piso)</p>
+                <p className="text-[10px] text-text-muted mt-0.5">Ingreso de lote (a torres o al piso)</p>
               </div>
             </div>
             <Plus className="w-4 h-4 text-accent shrink-0 ml-2" />
@@ -301,11 +334,29 @@ export default function PanoramaView({
               </div>
               <div>
                 <h3 className="text-xs font-bold text-foreground">Despacho de Material</h3>
-                <p className="text-[10px] text-text-muted mt-0.5">Retirar lote de flejes y registrar salida</p>
+                <p className="text-[10px] text-text-muted mt-0.5">Retirar lote y registrar salida</p>
               </div>
             </div>
             <Plus className="w-4 h-4 text-warning shrink-0 ml-2" />
           </button>
+
+          {onStartTransfer && (
+            <button 
+              onClick={onStartTransfer}
+              className="bg-info/5 border border-info/25 hover:border-info/40 hover:bg-info/10 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all active:scale-98 shadow-xs text-left group min-h-[72px] sm:col-span-2 md:col-span-1"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-info flex items-center justify-center text-white shrink-0 group-hover:scale-105 transition-transform shadow-md">
+                  <ArrowRightLeft className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-foreground">Traslado Interno</h3>
+                  <p className="text-[10px] text-text-muted mt-0.5">Mover flejes entre torres</p>
+                </div>
+              </div>
+              <Plus className="w-4 h-4 text-info shrink-0 ml-2" />
+            </button>
+          )}
         </div>
       )}
 
@@ -428,14 +479,27 @@ export default function PanoramaView({
                 const isOldest = fleje._dias === maxDias && maxDias > 0;
                 const isWarning = fleje._dias >= 30; // Solo alerta roja si > 30 días
 
+                const isTransferSource = transferActive && transferSession?.sourceFleje === fleje.id;
+                const isTransferSelectable = transferActive && transferSession?.step === 'select_source'; // Se puede trasladar cualquiera
+
                 visualStack.push(
                   <div 
                     key={`occupied-${itemIndex}`} 
+                    draggable={!dispatchActive && !receptionActive && !transferActive && !isPublicView}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('application/json', JSON.stringify({ sourceTorreId: torre.id, sourceFlejeId: fleje.id }));
+                    }}
                     onClick={(e) => {
                       if (dispatchActive) {
                         e.stopPropagation() // Evita clicks en el card
                         if (canSelect) {
                           onToggleSelectFleje(fleje)
+                        }
+                      } else if (transferActive) {
+                        e.stopPropagation()
+                        if (transferSession.step === 'select_source') {
+                          setTransferSession(prev => ({ ...prev, step: 'select_dest', sourceFleje: fleje.id }))
+                          showToast('Fleje seleccionado. Ahora selecciona la torre destino.')
                         }
                       }
                     }}
@@ -444,13 +508,16 @@ export default function PanoramaView({
                       ${dispatchActive && canSelect ? 'cursor-pointer active:scale-95' : ''}
                       ${dispatchActive && !canSelect && !isSelected ? 'opacity-40 cursor-not-allowed' : ''}
                       ${dispatchActive && !canSelect && isSelected ? 'opacity-80 cursor-not-allowed' : ''}
+                      ${transferActive && transferSession.step === 'select_source' ? 'cursor-pointer hover:ring-2 ring-info/50 hover:scale-105' : ''}
                       ${isSelected 
                         ? 'bg-warning text-white border-warning shadow-md scale-98' 
-                        : dispatchActive && canSelect
-                          ? 'bg-surface border-accent/40 text-accent hover:bg-accent/5'
-                          : isWarning && !dispatchActive
-                            ? 'bg-danger/10 border-danger/30 text-danger hover:border-danger/50'
-                            : 'bg-accent/10 border-accent/30 text-accent'
+                        : isTransferSource
+                          ? 'bg-info text-white border-info shadow-md scale-102 ring-2 ring-info/30 z-10'
+                          : dispatchActive && canSelect
+                            ? 'bg-surface border-accent/40 text-accent hover:bg-accent/5'
+                            : isWarning && !dispatchActive
+                              ? 'bg-danger/10 border-danger/30 text-danger hover:border-danger/50'
+                              : 'bg-accent/10 border-accent/30 text-accent'
                       }
                     `}
                   >
@@ -601,7 +668,13 @@ export default function PanoramaView({
                 onOpenBatchIngreso(torre.id, torre.posicion, capMax, cantidadActual)
               } else if (dispatchActive) {
                 // No abrir nada, se maneja mediante toques en las filas del peso
-              } else {
+              } else if (transferActive && transferSession.step === 'select_dest') {
+                if (isFull) {
+                  showToast('La torre de destino está llena.', true)
+                  return
+                }
+                onExecuteTransfer(transferSession.sourceFleje, torre.id)
+              } else if (!transferActive) {
                 onSelectTorre(torre.id)
               }
             }
@@ -611,19 +684,48 @@ export default function PanoramaView({
               : 0
             const hasSelections = selectedFromThisTorre > 0
             const isSelectedTorre = dispatchActive && hasSelections
+            const isTransferTargetValid = transferActive && transferSession.step === 'select_dest' && !isFull;
+            const isTransferSourceTorre = transferActive && transferSession.sourceFleje && flejes.some(f => f.id === transferSession.sourceFleje);
 
             return (
               <div 
                 key={torre.id}
                 onClick={handleCardClick}
+                onDragOver={(e) => {
+                  if (!transferActive && !isFull && !isPublicView && !receptionActive && !dispatchActive) {
+                    e.preventDefault(); // Permitir drop
+                    e.currentTarget.classList.add('bg-info/10', 'border-info', 'ring-2', 'ring-info/30');
+                  }
+                }}
+                onDragLeave={(e) => {
+                  e.currentTarget.classList.remove('bg-info/10', 'border-info', 'ring-2', 'ring-info/30');
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.remove('bg-info/10', 'border-info', 'ring-2', 'ring-info/30');
+                  if (isFull || isPublicView || receptionActive || dispatchActive) return;
+                  
+                  try {
+                    const data = JSON.parse(e.dataTransfer.getData('application/json'));
+                    if (data && data.sourceFlejeId && data.sourceTorreId !== torre.id) {
+                      onExecuteTransfer(data.sourceFlejeId, torre.id);
+                    }
+                  } catch(err) {
+                    console.error('Drop error', err)
+                  }
+                }}
                 className={`
                   bg-surface border rounded-2xl p-5 shadow-xs transition-all duration-200 flex flex-col justify-between
-                  ${isDimmed ? 'opacity-30 pointer-events-none border-border' : 'hover:shadow-md cursor-pointer'}
+                  ${isDimmed || (transferActive && transferSession.step === 'select_dest' && isFull) ? 'opacity-30 pointer-events-none border-border' : 'hover:shadow-md cursor-pointer'}
                   ${receptionActive && isFull ? 'opacity-40 border-border pointer-events-none' : ''}
                   ${receptionActive && !isFull ? 'border-accent/40 bg-accent/2 hover:border-accent' : ''}
                   ${isSelectedTorre 
                     ? 'border-warning bg-warning/2 ring-2 ring-warning/25 shadow-md shadow-warning/5 scale-102 z-10' 
-                    : !receptionActive ? 'border-border hover:border-accent/40' : ''
+                    : isTransferTargetValid
+                      ? 'border-info bg-info/5 ring-2 ring-info/20 shadow-md shadow-info/5 hover:bg-info/10'
+                      : isTransferSourceTorre
+                        ? 'border-info/40 bg-surface'
+                        : !receptionActive ? 'border-border hover:border-accent/40' : ''
                   }
                 `}
               >
@@ -784,7 +886,7 @@ export default function PanoramaView({
       )}
       
       {/* ==================== FLOATING ACTION BUTTONS (FAB) ==================== */}
-      {showFABs && !receptionActive && !dispatchActive && !isPublicView && (
+      {showFABs && !receptionActive && !dispatchActive && !transferActive && !isPublicView && (
         <div className="fixed bottom-24 right-6 md:bottom-8 md:right-8 z-40 flex flex-col gap-4 animate-slideUp">
           {/* Dispatch FAB */}
           <button 
@@ -795,6 +897,15 @@ export default function PanoramaView({
             <Send className="w-6 h-6" />
           </button>
           
+          {/* Transfer FAB */}
+          <button 
+            onClick={onStartTransfer}
+            title="Traslado Interno"
+            className="w-14 h-14 bg-info hover:bg-info/90 text-white rounded-2xl shadow-xl flex items-center justify-center cursor-pointer transition-all hover:scale-105 active:scale-95 border border-info/50"
+          >
+            <ArrowRightLeft className="w-6 h-6" />
+          </button>
+
           {/* Reception FAB */}
           <button 
             onClick={onStartReception}

@@ -195,6 +195,8 @@ function App() {
     }
   })
 
+  const [transferSession, setTransferSession] = useState({ active: false, step: 'select_source', sourceFleje: null })
+
   // Sincronizar Recepción con LocalStorage y Supabase Storage (active_sessions)
   useEffect(() => {
     const syncReception = async () => {
@@ -636,6 +638,57 @@ function App() {
     })
     setSeccionActual('panorama')
     showToast('Despacho Iniciado')
+  }
+
+  // Iniciar Traslado Interno
+  const handleStartTransfer = () => {
+    if (receptionSession || dispatchSession) {
+      showToast('No puedes iniciar un traslado si hay otra sesión activa.', true)
+      return
+    }
+    setTransferSession({ active: true, step: 'select_source', sourceFleje: null })
+    showToast('Modo Traslado: Selecciona el fleje que deseas mover.')
+  }
+
+  const handleCancelTransfer = () => {
+    setTransferSession({ active: false, step: 'select_source', sourceFleje: null })
+  }
+
+  const handleExecuteTransfer = (sourceFlejeId, destTorreId) => {
+    // Buscar datos visuales para el modal
+    const sourceTorre = torres.find(t => (inventarioMap[t.id] || []).some(f => f.id === sourceFlejeId))
+    const destTorre = torres.find(t => t.id === destTorreId)
+    const fleje = inventarioMap[sourceTorre?.id]?.find(f => f.id === sourceFlejeId)
+
+    if (!sourceTorre || !destTorre || !fleje) {
+      showToast('Error al identificar fleje o torre.', true)
+      handleCancelTransfer()
+      return
+    }
+
+    setConfirmConfig({
+      title: 'Confirmar Traslado Interno',
+      message: `¿Estás seguro de trasladar el fleje #${fleje.lote || 'S/L'} (${fleje.peso} kg) desde la ${sourceTorre.posicion} hacia la ${destTorre.posicion}?`,
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase.rpc('trasladar_fleje_interno', {
+            p_fleje_id: sourceFlejeId,
+            p_nueva_ubicacion_id: destTorreId,
+            p_usuario: userProfile?.name || 'Operador'
+          })
+          if (error) throw error
+
+          showToast(`Fleje trasladado a ${destTorre.posicion}`)
+          handleCancelTransfer()
+          queryClient.invalidateQueries({ queryKey: ['torres'] })
+          queryClient.invalidateQueries({ queryKey: ['historial'] })
+        } catch (e) {
+          console.error(e)
+          showToast('Error al realizar el traslado: ' + e.message, true)
+        }
+      }
+    })
   }
 
   // Cancelar Operación Activa
@@ -1304,6 +1357,11 @@ function App() {
               showToast={showToast}
               userProfile={activeProfile}
               isPublicView={isPublicView}
+              transferSession={transferSession}
+              setTransferSession={setTransferSession}
+              onStartTransfer={handleStartTransfer}
+              onCancelTransfer={handleCancelTransfer}
+              onExecuteTransfer={handleExecuteTransfer}
             />
           )}
 
