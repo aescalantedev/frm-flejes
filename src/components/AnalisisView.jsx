@@ -64,9 +64,16 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
   }, [torres, inventario])
 
   const { capacidadTotal, capacidadOcupada } = useMemo(() => {
-    let total = 0, ocupada = 0
-    torres.forEach(t => { total += t.cantidad_maxima; ocupada += (inventario[t.id] || []).length })
-    return { capacidadTotal: total, capacidadOcupada: ocupada }
+    let capacidadNormal = 0, ocupadaAll = 0
+    torres.forEach(t => { 
+      const pos = t.posicion || t.codigo_posicion || ''
+      const isExtra = pos.toLowerCase().includes('extraordinario')
+      if (!isExtra) {
+        capacidadNormal += t.cantidad_maxima; 
+      }
+      ocupadaAll += (inventario[t.id] || []).length 
+    })
+    return { capacidadTotal: capacidadNormal, capacidadOcupada: ocupadaAll }
   }, [torres, inventario])
 
   const porcentajeOcupacion = capacidadTotal > 0 ? (capacidadOcupada / capacidadTotal) * 100 : 0
@@ -114,11 +121,33 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
   }, [torres, inventario, isTN, topNTorres, totalPeso])
 
   const chartCapacidad = useMemo(() => {
-    let ocupados = 0, libres = 0
-    torres.forEach(t => { const fl = inventario[t.id] || []; ocupados += fl.length; libres += Math.max(0, t.cantidad_maxima - fl.length) })
-    const pct = ocupados + libres > 0 ? ((ocupados / (ocupados + libres)) * 100).toFixed(1) : 0
+    let ocupadosAll = 0, capacidadNormal = 0
+    torres.forEach(t => { 
+      const pos = t.posicion || t.codigo_posicion || ''
+      const isExtra = pos.toLowerCase().includes('extraordinario')
+      if (!isExtra) {
+        capacidadNormal += t.cantidad_maxima; 
+      }
+      const fl = inventario[t.id] || []; 
+      ocupadosAll += fl.length; 
+    })
+    
+    const pct = capacidadNormal > 0 ? ((ocupadosAll / capacidadNormal) * 100).toFixed(1) : 0
+    
+    const ocupadosNormales = Math.min(ocupadosAll, capacidadNormal)
+    const libres = Math.max(0, capacidadNormal - ocupadosAll)
+    const sobrecupo = Math.max(0, ocupadosAll - capacidadNormal)
+
+    const dataPie = [
+      { value: ocupadosNormales, name: `Ocupado (${ocupadosNormales})`, itemStyle: { color: "#3b82f6" } },
+      { value: libres, name: `Libre (${libres})`, itemStyle: { color: "#1f2937" } }
+    ]
+    if (sobrecupo > 0) {
+      dataPie.push({ value: sobrecupo, name: `Sobrecarga (${sobrecupo})`, itemStyle: { color: "#ef4444" } })
+    }
+
     return {
-      tooltip: { trigger: "item", formatter: "{b}: {c} flejes ({d}%)" },
+      tooltip: { trigger: "item", formatter: "{b}: {c} flejes" },
       legend: { bottom: "0%", textStyle: { color: "#888", fontSize: 11 } },
       graphic: [
         { type: "text", left: "center", top: "35%", style: { text: `${pct}%`, fill: "#fff", fontSize: 22, fontWeight: "bold" } },
@@ -129,10 +158,7 @@ export default function AnalisisView({ torres = [], inventario = {}, historial =
         avoidLabelOverlap: false,
         itemStyle: { borderRadius: 6, borderColor: "#111", borderWidth: 2 },
         label: { show: false }, labelLine: { show: false },
-        data: [
-          { value: ocupados, name: `Ocupado (${ocupados})`, itemStyle: { color: "#3b82f6" } },
-          { value: libres, name: `Libre (${libres})`, itemStyle: { color: "#1f2937" } }
-        ]
+        data: dataPie
       }],
       backgroundColor: "transparent"
     }

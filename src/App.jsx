@@ -579,8 +579,17 @@ function App() {
           }
           queryClient.invalidateQueries({ queryKey: ['torres'] })
         } catch (e) {
-          console.error(e)
-          showToast('Error al eliminar la torre', true)
+          console.error("Error eliminando torre:", e)
+          if (e.code === '23503' || (e.message && e.message.toLowerCase().includes('foreign key')) || (e.details && e.details.toLowerCase().includes('foreign key'))) {
+            setConfirmConfig({
+              title: 'Acción Denegada',
+              message: `No se puede eliminar la torre "${torre.posicion}".\n\nEsta ubicación ya posee un historial de movimientos registrado (ha recibido o despachado flejes en el pasado).\n\nPara garantizar la trazabilidad y auditoría de la información, el sistema no permite eliminar torres que han tenido actividad.`,
+              type: 'danger',
+              isAlert: true
+            })
+          } else {
+            showToast('Error al eliminar la torre: ' + (e.message || 'Error desconocido'), true)
+          }
         }
       }
     })
@@ -1362,6 +1371,7 @@ function App() {
               onStartTransfer={handleStartTransfer}
               onCancelTransfer={handleCancelTransfer}
               onExecuteTransfer={handleExecuteTransfer}
+              setConfirmConfig={setConfirmConfig}
             />
           )}
 
@@ -1534,21 +1544,26 @@ function App() {
             <div className="flex gap-2 pt-2">
               <button
                 onClick={async () => {
-                  await confirmConfig.onConfirm()
+                  // Guardamos la función y limpiamos el estado PRIMERO
+                  // Así si la función falla y lanza otra alerta (setConfirmConfig), no la sobreescribimos con null
+                  const action = confirmConfig.onConfirm
                   setConfirmConfig(null)
+                  if (action) await action()
                 }}
                 className={`flex-1 py-2.5 text-white rounded-xl text-xs font-semibold cursor-pointer transition-colors text-center shadow-sm
                   ${confirmConfig.type === 'danger' ? 'bg-danger hover:bg-red-700' : 'bg-accent hover:bg-accent-hover'}
                 `}
               >
-                Confirmar
+                {confirmConfig.isAlert ? 'Entendido' : 'Confirmar'}
               </button>
-              <button
-                onClick={() => setConfirmConfig(null)}
-                className="flex-1 py-2.5 bg-bg hover:bg-surface-hover text-text-muted border border-border rounded-xl text-xs font-semibold cursor-pointer transition-colors text-center"
-              >
-                Cancelar
-              </button>
+              {!confirmConfig.isAlert && (
+                <button
+                  onClick={() => setConfirmConfig(null)}
+                  className="flex-1 py-2.5 bg-bg hover:bg-surface-hover text-text-muted border border-border rounded-xl text-xs font-semibold cursor-pointer transition-colors text-center"
+                >
+                  Cancelar
+                </button>
+              )}
             </div>
           </div>
         </div>

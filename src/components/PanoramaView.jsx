@@ -41,11 +41,13 @@ export default function PanoramaView({
   setTransferSession,
   onStartTransfer,
   onCancelTransfer,
-  onExecuteTransfer
+  onExecuteTransfer,
+  setConfirmConfig
 }) {
   const { isTN } = useUnitSystem()
   const [filtroEstado, setFiltroEstado] = useState('todas')
   const [viewMode, setViewMode] = useState('2d')
+  const [showExtraordinarios, setShowExtraordinarios] = useState(false)
 
   const receptionActive = !!receptionSession
   const dispatchActive = !!dispatchSession
@@ -115,25 +117,67 @@ export default function PanoramaView({
     )
   }
 
-  // 1. Filtrar torres primero según la query de búsqueda en el header
-  const searchFiltered = searchQuery
-    ? torres.filter(t => {
-        const sq = searchQuery.toLowerCase();
-        const matchTorre = t.posicion.toLowerCase().includes(sq) ||
-                           t.nombre_medida.toLowerCase().includes(sq);
-        
-        if (matchTorre) return true;
+  const handleToggleExtraordinarios = () => {
+    if (showExtraordinarios) {
+      // Intentando ocultar
+      let hasFlejes = false;
+      torres.forEach(t => {
+        const isExtra = (t.posicion || t.codigo_posicion || '').toLowerCase().includes('extraordinario');
+        if (isExtra && (inventario[t.id] || []).length > 0) {
+          hasFlejes = true;
+        }
+      });
+      if (hasFlejes) {
+        if (setConfirmConfig) {
+          setConfirmConfig({
+            title: 'Acción Denegada',
+            message: 'Hay flejes almacenados en posiciones Extraordinarias.\n\nPor seguridad del inventario, no se pueden ocultar estas torres hasta que sean vaciadas por completo.',
+            type: 'danger',
+            isAlert: true
+          });
+        } else {
+          alert("⚠️ Hay flejes almacenados en posiciones Extraordinarias.\n\nPor seguridad del inventario, no se pueden ocultar estas torres hasta que sean vaciadas por completo.");
+        }
+        return;
+      }
+    }
+    setShowExtraordinarios(!showExtraordinarios);
+  }
 
-        // Buscar también dentro de los flejes de la torre
-        const flejes = inventario[t.id] || [];
-        const matchFlejes = flejes.some(f => 
-          (f.medida && f.medida.toLowerCase().includes(sq)) ||
-          (f.codigo && f.codigo.toLowerCase().includes(sq))
-        );
+  // 1. Filtrar torres primero según la query de búsqueda en el header y visibilidad extraordinaria
+  const searchFiltered = torres.filter(t => {
+    // A. Reglas de Visibilidad: Extraordinarias
+    const pos = t.posicion || t.codigo_posicion || ''
+    const isExtraordinario = pos.toLowerCase().includes('extraordinario')
+    if (isExtraordinario) {
+      const tieneFlejes = (inventario[t.id] || []).length > 0
+      
+      // Si el usuario activó "Mostrar Extraordinarios", o si tiene flejes, o si estamos recibiendo/trasladando, es visible
+      const forceVisible = showExtraordinarios || tieneFlejes || receptionActive || transferActive;
+      
+      if (!forceVisible) {
+        return false // Ocultarla completamente del DOM
+      }
+    }
 
-        return matchFlejes;
-      })
-    : torres
+    // B. Filtro de Búsqueda de Texto
+    if (!searchQuery) return true
+
+    const sq = searchQuery.toLowerCase();
+    const matchTorre = pos.toLowerCase().includes(sq) ||
+                       t.nombre_medida.toLowerCase().includes(sq);
+    
+    if (matchTorre) return true;
+
+    // Buscar también dentro de los flejes de la torre
+    const flejes = inventario[t.id] || [];
+    const matchFlejes = flejes.some(f => 
+      (f.medida && f.medida.toLowerCase().includes(sq)) ||
+      (f.codigo && f.codigo.toLowerCase().includes(sq))
+    );
+
+    return matchFlejes;
+  })
 
   const selectedTorreIds = new Set(dispatchCart.map(item => item.torre_id).filter(Boolean))
 
@@ -164,7 +208,7 @@ export default function PanoramaView({
   
   let totalFlejes = 0
   let pesoTotalAcumulado = 0 // en kg
-  let sumaPorcentajes = 0
+  let capacidadMaximaNormal = 0
 
   const torresData = filteredTorres.map(torre => {
     const flejes = inventario[torre.id] || []
@@ -182,7 +226,12 @@ export default function PanoramaView({
     
     totalFlejes += cantidadActual
     pesoTotalAcumulado += pesoTorre
-    sumaPorcentajes += porcentaje
+    
+    // La capacidad base instalada de la planta SOLO se toma de las torres normales
+    const isExtraordinario = torre.posicion.toLowerCase().includes('extraordinario')
+    if (!isExtraordinario) {
+      capacidadMaximaNormal += capMax
+    }
 
     let statusText = 'Vacío'
     let statusClass = 'bg-text-muted/10 text-text-muted border border-text-muted/20'
@@ -204,19 +253,21 @@ export default function PanoramaView({
       costoTotalTorre,
       porcentaje,
       statusText,
-      statusClass
+      statusClass,
+      isExtraordinario
     }
   })
   
   const displayTotalPeso = isTN ? (pesoTotalAcumulado / 1000).toFixed(3) : pesoTotalAcumulado.toFixed(2)
   const displayTotalPesoLabel = isTN ? 't' : 'kg'
-  const capacidadPromedio = totalTorres > 0 ? (sumaPorcentajes / totalTorres).toFixed(0) : 0
+  // Calcular la ocupación total permitiendo desbordamiento (>100%)
+  const capacidadPlanta = capacidadMaximaNormal > 0 ? ((totalFlejes / capacidadMaximaNormal) * 100).toFixed(0) : 0
 
   const statCards = [
     { label: 'Torres Filtradas', value: totalTorres, color: 'text-accent' },
     { label: 'Total Flejes', value: totalFlejes, color: 'text-accent' },
     { label: 'Peso Filtrado', value: `${displayTotalPeso} ${displayTotalPesoLabel}`, color: 'text-warning' },
-    { label: 'Capacidad Promedio', value: `${capacidadPromedio}%`, color: 'text-info' }
+    { label: 'Capacidad Planta', value: `${capacidadPlanta}%`, color: 'text-info' }
   ]
 
   if (viewMode === '3d') {
@@ -233,7 +284,7 @@ export default function PanoramaView({
             totalTorres,
             totalFlejes,
             pesoFmt: `${displayTotalPeso} ${displayTotalPesoLabel}`,
-            capacidadPromedio: `${capacidadPromedio}%`
+            capacidadPromedio: `${capacidadPlanta}%`
           }}
         />
         
@@ -393,6 +444,19 @@ export default function PanoramaView({
               </button>
             )
           })}
+          
+          <button
+            onClick={handleToggleExtraordinarios}
+            className={`
+              px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all border cursor-pointer flex items-center gap-2
+              ${showExtraordinarios 
+                ? 'bg-danger/10 border-danger/30 text-danger font-bold' 
+                : 'bg-surface border-border text-text-muted hover:bg-surface-hover hover:text-foreground'
+              }
+            `}
+          >
+            <span>{showExtraordinarios ? 'Ocultar Extraordinarios' : 'Ver Extraordinarios'}</span>
+          </button>
         </div>
 
         {/* Toggle 3D solo en escritorio */}

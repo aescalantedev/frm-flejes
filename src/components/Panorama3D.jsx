@@ -962,23 +962,40 @@ export default function Panorama3D({ torres, inventario, onSelectTorre, stats, f
     // Si ya creamos las torres, solo actualizamos los flejes.
     // Asumimos que las torres son estáticas. Si cambia la cantidad de torres, limpiamos y reconstruimos.
     if (Object.keys(engine.allTowers).length !== torres.length) {
-        // Limpieza profunda (no ideal para prod constante, pero funciona para setup)
         // Lo ideal es tener un renderId, pero por ahora...
-        torres.forEach((tData, index) => {
+        let idxNormal = 0;
+        let idxExtra = 0;
+        
+        torres.forEach((tData) => {
             if (engine.allTowers[tData.id]) return;
             const espaciadoX = 13, espaciadoZ = 13, startX = -90, zFila = -15, startZ = zFila + 4 * espaciadoZ;
             let x, z;
-            if (index < 20) {
-              let r = Math.floor(index / 4);
-              let c = index % 4;
-              x = startX + c * espaciadoX;
-              z = startZ - r * espaciadoZ;
+            
+            const pos = tData.posicion || tData.codigo_posicion || '';
+            const isExtraordinario = pos.toLowerCase().includes('extraordinario');
+
+            if (isExtraordinario) {
+              // Zona ROJA (Extraordinarios): A la derecha del bloque 4x5, delante de la fila P21-P34
+              let c = idxExtra % 8; 
+              let r = Math.floor(idxExtra / 8);
+              x = startX + 4 * espaciadoX + c * espaciadoX;
+              z = zFila + espaciadoZ + (r * espaciadoZ); // Hacia adelante (Z positivo)
+              idxExtra++;
             } else {
-              let i = index - 20;
-              // Corregido: empezar desde la columna 4 (después de P20) en lugar de la columna 2
-              x = startX + 4 * espaciadoX + i * espaciadoX;
-              z = zFila;
+              // Torres normales (P01 - P34)
+              if (idxNormal < 20) {
+                let r = Math.floor(idxNormal / 4);
+                let c = idxNormal % 4;
+                x = startX + c * espaciadoX;
+                z = startZ - r * espaciadoZ;
+              } else {
+                let i = idxNormal - 20;
+                x = startX + 4 * espaciadoX + i * espaciadoX;
+                z = zFila;
+              }
+              idxNormal++;
             }
+            
             engine.createTower(tData, x, z);
         });
     }
