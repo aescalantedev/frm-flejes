@@ -36,6 +36,7 @@ import SessionInitModal from './components/SessionInitModal'
 import BatchIngresoModal from './components/BatchIngresoModal'
 import ConfirmSessionModal from './components/ConfirmSessionModal'
 import SessionBanner from './components/SessionBanner'
+import UpdatePasswordModal from './components/UpdatePasswordModal'
 
 function App() {
   const queryClient = useQueryClient()
@@ -44,6 +45,9 @@ function App() {
   const [userProfile, setUserProfile] = useState(null)
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [showPublicLinkModal, setShowPublicLinkModal] = useState(false)
+  const [isRecoveringPassword, setIsRecoveringPassword] = useState(() => {
+    return localStorage.getItem('forcePasswordReset') === 'true'
+  })
 
   const urlParams = new URLSearchParams(window.location.search)
   const isPublicView = urlParams.get('public') === 'true'
@@ -62,6 +66,10 @@ function App() {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (_event === 'PASSWORD_RECOVERY') {
+        localStorage.setItem('forcePasswordReset', 'true')
+        setIsRecoveringPassword(true)
+      }
       setSession(session)
       if (session) {
         fetchProfile(session.user.id, session.user.email)
@@ -1228,6 +1236,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
+      localStorage.removeItem('forcePasswordReset')
       await supabase.auth.signOut()
       showToast('Sesión cerrada correctamente')
     } catch (err) {
@@ -1308,6 +1317,10 @@ function App() {
         </div>
       </div>
     )
+  }
+
+  if (isRecoveringPassword) {
+    return <UpdatePasswordModal onClose={() => setIsRecoveringPassword(false)} />
   }
 
   return (

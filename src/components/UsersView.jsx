@@ -212,10 +212,10 @@ export default function UsersView({ userProfile, showToast }) {
                           <select
                             value={user.rol || 'Operador'}
                             onChange={(e) => handleChangeUserRole(user.id, e.target.value)}
-                            disabled={user.id === userProfile?.id}
+                            disabled={user.id === userProfile?.id || user.email === 'juan@aescalante.dev'}
                             className={`
                               bg-bg border border-border text-xs rounded-xl px-2 py-1.5 outline-none focus:border-accent
-                              ${user.id === userProfile?.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-surface-hover'}
+                              ${(user.id === userProfile?.id || user.email === 'juan@aescalante.dev') ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-surface-hover'}
                               ${user.rol === 'Administrador' ? 'text-accent font-bold' : 'text-foreground'}
                             `}
                           >
@@ -226,10 +226,10 @@ export default function UsersView({ userProfile, showToast }) {
                         <td className="px-4 py-3">
                           <button
                             onClick={() => handleToggleUserApproval(user.id, user.aprobado)}
-                            disabled={user.id === userProfile?.id}
+                            disabled={user.id === userProfile?.id || user.email === 'juan@aescalante.dev'}
                             className={`
                               flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors
-                              ${user.id === userProfile?.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:brightness-110'}
+                              ${(user.id === userProfile?.id || user.email === 'juan@aescalante.dev') ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:brightness-110'}
                               ${user.aprobado 
                                 ? 'bg-green-500/10 text-green-500 border-green-500/20' 
                                 : 'bg-red-500/10 text-red-500 border-red-500/20'
@@ -246,9 +246,9 @@ export default function UsersView({ userProfile, showToast }) {
                         <td className="px-4 py-3 text-right">
                            <button
                              onClick={() => handleDeleteUser(user.id, user.name)}
-                             disabled={user.id === userProfile?.id}
+                             disabled={user.id === userProfile?.id || user.email === 'juan@aescalante.dev'}
                              className="p-1.5 text-text-muted hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                             title="Eliminar Usuario"
+                             title={user.email === 'juan@aescalante.dev' ? 'Super Administrador protegido' : 'Eliminar Usuario'}
                            >
                              <Trash2 className="w-4 h-4" />
                            </button>
